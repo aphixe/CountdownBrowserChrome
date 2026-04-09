@@ -27,6 +27,8 @@ const popOutButton = document.getElementById("popOutButton");
 const openSettingsButton = document.getElementById("openSettingsButton");
 const todayTimer = document.getElementById("todayTimer");
 const dayTimeLeft = document.getElementById("dayTimeLeft");
+const goalProgressFill = document.getElementById("goalProgressFill");
+const goalProgressText = document.getElementById("goalProgressText");
 const yearTotal = document.getElementById("yearTotal");
 const longestStreak = document.getElementById("longestStreak");
 const currentStreak = document.getElementById("currentStreak");
@@ -220,6 +222,12 @@ async function render() {
 
   todayTimer.textContent = formatDuration(today.totalSeconds);
   dayTimeLeft.textContent = `Day time left: ${formatDuration(getDayTimeLeftSeconds(settings, now))}`;
+  const goalSeconds = profile.superGoalMinutes * 60;
+  const goalProgressPercent = goalSeconds > 0
+    ? Math.min((today.totalSeconds / goalSeconds) * 100, 100)
+    : 0;
+  goalProgressFill.style.width = `${goalProgressPercent}%`;
+  goalProgressText.textContent = `${Math.round(goalProgressPercent)}%`;
   yearTotal.textContent = formatDuration(yearSeconds);
   longestStreak.textContent = `${streaks.longestStreak} days`;
   currentStreak.textContent = `${streaks.currentStreak} days`;
