@@ -232,9 +232,16 @@ async function importCsv() {
   try {
     const csvText = await file.text();
     const { sessions, goalMinutes } = parseImportedSessions(csvText, profileId);
-    const { merged, importedCount } = mergeImportedSessions(draftSettings.sessions || [], sessions);
+    const existingSessions = draftSettings.sessions || [];
+    if (!sessions.length) {
+      setImportStatus("No sessions found in that CSV.");
+      return;
+    }
 
-    draftSettings.sessions = merged;
+    draftSettings.sessions = existingSessions
+      .filter((session) => session.profileId !== profileId)
+      .concat(sessions);
+    const importedCount = sessions.length;
 
     const profile = draftSettings.profiles.find((candidate) => candidate.id === profileId);
     if (profile && goalMinutes) {
@@ -245,11 +252,6 @@ async function importCsv() {
     await saveSettings(draftSettings);
     renderOptions();
     csvFileInput.value = "";
-
-    if (!importedCount) {
-      setImportStatus("No new sessions were imported. Matching rows already existed.");
-      return;
-    }
 
     const goalSuffix = goalMinutes ? ` Goal set to ${goalMinutes} minutes.` : "";
     setImportStatus(`Imported ${importedCount} sessions into ${getProfile(draftSettings, profileId).name}.${goalSuffix}`);

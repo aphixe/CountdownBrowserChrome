@@ -57,18 +57,21 @@
     return { start, end };
   }
 
+  function getTrackingWindowForDate(date, settings) {
+    const anchor = applyTime(date, settings.dayStart);
+    const start = date < anchor ? new Date(anchor.getTime() - 86400000) : anchor;
+    const end = new Date(start.getTime() + 86400000);
+    return { start, end };
+  }
+
+  function getTrackingWindowForDayKey(dayKey, settings) {
+    const start = applyTime(parseDayKey(dayKey), settings.dayStart);
+    const end = new Date(start.getTime() + 86400000);
+    return { start, end };
+  }
+
   function getTrackingDayKey(date, settings) {
-    const currentWindow = getWindowForDate(date, settings);
-    if (date >= currentWindow.start && date < currentWindow.end) {
-      return formatDayKey(currentWindow.start);
-    }
-
-    if (date < currentWindow.start) {
-      const previousDay = new Date(date);
-      previousDay.setDate(previousDay.getDate() - 1);
-      return formatDayKey(getWindowForDate(previousDay, settings).start);
-    }
-
+    const currentWindow = getTrackingWindowForDate(date, settings);
     return formatDayKey(currentWindow.start);
   }
 
@@ -161,15 +164,12 @@
 
   function splitSessionByDay(startMs, endMs, settings) {
     const chunks = [];
-    const startDate = new Date(startMs);
-    startDate.setHours(0, 0, 0, 0);
-    startDate.setDate(startDate.getDate() - 1);
+    const startWindow = getTrackingWindowForDate(new Date(startMs), settings);
+    let cursor = new Date(startWindow.start);
 
-    const endDate = new Date(endMs);
-    endDate.setHours(0, 0, 0, 0);
-
-    for (let cursor = new Date(startDate); cursor <= endDate; cursor.setDate(cursor.getDate() + 1)) {
-      const { start, end } = getWindowForDate(cursor, settings);
+    while (cursor.getTime() < endMs) {
+      const start = cursor;
+      const end = new Date(start.getTime() + 86400000);
       const chunkStart = Math.max(startMs, start.getTime());
       const chunkEnd = Math.min(endMs, end.getTime());
 
@@ -179,6 +179,8 @@
           durationSeconds: Math.floor((chunkEnd - chunkStart) / 1000)
         });
       }
+
+      cursor = new Date(cursor.getTime() + 86400000);
     }
 
     return chunks;
@@ -270,18 +272,17 @@
     }
 
     const todayKey = getTrackingDayKey(now, settings);
-    const todayWindow = getWindowForDate(parseDayKey(todayKey), settings);
-    const referenceKey = now >= todayWindow.end ? todayKey : formatDayKey(new Date(parseDayKey(todayKey).getTime() - 86400000));
+    const todayWindow = getTrackingWindowForDayKey(todayKey, settings);
+    const todayComplete = totals[todayKey] >= goalSeconds;
+    const streakEndKey = todayComplete
+      ? todayKey
+      : formatDayKey(new Date(parseDayKey(todayKey).getTime() - 86400000));
 
-    if (completedDays.length) {
-      let targetDate = parseDayKey(referenceKey);
+    if (completedDays.length && now < todayWindow.end) {
+      let targetDate = parseDayKey(streakEndKey);
       while (totals[formatDayKey(targetDate)] >= goalSeconds) {
         currentStreak += 1;
         targetDate = new Date(targetDate.getTime() - 86400000);
-      }
-
-      if (totals[todayKey] >= goalSeconds && now < todayWindow.end) {
-        currentStreak += 1;
       }
     }
 
@@ -698,6 +699,8 @@
     getStreakStats,
     getTodayStats,
     getTrackingDayKey,
+    getTrackingWindowForDate,
+    getTrackingWindowForDayKey,
     getWindowForDate,
     getYearTotalSeconds,
     loadSettings,
