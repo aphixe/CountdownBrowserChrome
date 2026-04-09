@@ -15,6 +15,12 @@ const {
 } = window.CountDownPro;
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const defaultFloatingIconHref = chrome.runtime.getURL("icons/icon-128.png");
+const FLOATING_WINDOW_BOUNDS_KEY = "floatingWindowBounds";
+const DEFAULT_FLOATING_WINDOW_BOUNDS = {
+  width: 620,
+  height: 430
+};
 
 const profileSelect = document.getElementById("profileSelect");
 const popOutButton = document.getElementById("popOutButton");
@@ -27,10 +33,12 @@ const currentStreak = document.getElementById("currentStreak");
 const goalLabel = document.getElementById("goalLabel");
 const heatmap = document.getElementById("heatmap");
 const clockButton = document.getElementById("clockButton");
+const pageFavicon = document.getElementById("pageFavicon");
+const popupShell = document.querySelector(".popup-shell");
 
 let liveIntervalId = null;
 const isFloatingWindow = new URLSearchParams(window.location.search).get("mode") === "window";
-let lastFloatingSize = { width: 0, height: 0 };
+let saveBoundsTimeoutId = null;
 
 function renderProfiles(settings) {
   const extraOptions = [
@@ -116,6 +124,88 @@ function renderHeatmap(settings) {
   }
 }
 
+function buildEmojiIconDataUrl(emoji, size) {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+
+  context.clearRect(0, 0, size, size);
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = `${Math.floor(size * 0.82)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+  context.fillText(emoji, size / 2, size / 2 + size * 0.04);
+
+  return canvas.toDataURL("image/png");
+}
+
+function updateFloatingWindowIcon(isRunning) {
+  if (!isFloatingWindow || !pageFavicon) {
+    return;
+  }
+
+  pageFavicon.href = isRunning
+    ? buildEmojiIconDataUrl("⌛", 128)
+    : defaultFloatingIconHref;
+}
+
+async function getStoredFloatingWindowBounds() {
+  const result = await chrome.storage.local.get(FLOATING_WINDOW_BOUNDS_KEY);
+  const bounds = result[FLOATING_WINDOW_BOUNDS_KEY];
+
+  if (!bounds || typeof bounds.width !== "number" || typeof bounds.height !== "number") {
+    return DEFAULT_FLOATING_WINDOW_BOUNDS;
+  }
+
+  return {
+    width: Math.round(bounds.width),
+    height: Math.round(bounds.height)
+  };
+}
+
+async function saveFloatingWindowBounds() {
+  if (!isFloatingWindow) {
+    return;
+  }
+
+  await chrome.storage.local.set({
+    [FLOATING_WINDOW_BOUNDS_KEY]: {
+      width: window.outerWidth,
+      height: window.outerHeight
+    }
+  });
+}
+
+function scheduleFloatingWindowBoundsSave() {
+  if (!isFloatingWindow) {
+    return;
+  }
+
+  clearTimeout(saveBoundsTimeoutId);
+  saveBoundsTimeoutId = setTimeout(() => {
+    saveBoundsTimeoutId = null;
+    void saveFloatingWindowBounds();
+  }, 150);
+}
+
+function applyFloatingWindowScale() {
+  if (!isFloatingWindow || !popupShell) {
+    return;
+  }
+
+  popupShell.style.transform = "scale(1)";
+
+  const naturalWidth = popupShell.offsetWidth;
+  const naturalHeight = popupShell.offsetHeight;
+
+  if (!naturalWidth || !naturalHeight) {
+    return;
+  }
+
+  const scale = Math.min(window.innerWidth / naturalWidth, window.innerHeight / naturalHeight, 1);
+  popupShell.style.transform = `scale(${scale})`;
+}
+
 async function render() {
   const settings = await loadSettings();
   const profile = getProfile(settings, settings.activeProfileId);
@@ -136,36 +226,12 @@ async function render() {
   goalLabel.textContent = `Super goal: ${formatGoalMinutes(profile.superGoalMinutes)}`;
   clockButton.textContent = activeSession ? "Clock Off" : "Clock On";
   clockButton.dataset.running = activeSession ? "true" : "false";
-}
-
-async function resizeFloatingWindowToFit() {
-  if (!isFloatingWindow) {
-    return;
-  }
-
-  const shell = document.querySelector(".popup-shell");
-  const shellRect = shell ? shell.getBoundingClientRect() : document.body.getBoundingClientRect();
-  const frameWidth = Math.max(window.outerWidth - window.innerWidth, 0);
-  const frameHeight = Math.max(window.outerHeight - window.innerHeight, 0);
-  const width = Math.ceil(shellRect.width + frameWidth);
-  const height = Math.ceil(shellRect.height + frameHeight);
-
-  if (width === lastFloatingSize.width && height === lastFloatingSize.height) {
-    return;
-  }
-
-  lastFloatingSize = { width, height };
-
-  const currentWindow = await chrome.windows.getCurrent();
-  await chrome.windows.update(currentWindow.id, {
-    width,
-    height
-  });
+  updateFloatingWindowIcon(Boolean(activeSession));
 }
 
 async function renderAndResize() {
   await render();
-  await resizeFloatingWindowToFit();
+  applyFloatingWindowScale();
 }
 
 async function handleProfileChange(event) {
@@ -198,11 +264,13 @@ async function toggleClock() {
 }
 
 async function openFloatingWindow() {
+  const bounds = await getStoredFloatingWindowBounds();
+
   await chrome.windows.create({
     url: chrome.runtime.getURL("popup.html?mode=window"),
     type: "popup",
-    width: 560,
-    height: 320,
+    width: bounds.width,
+    height: bounds.height,
     focused: true
   });
 
@@ -213,6 +281,7 @@ async function initializePopup() {
   if (isFloatingWindow) {
     popOutButton.hidden = true;
     document.title = "CountDown Pro Floating";
+    document.body.classList.add("floating-window");
   }
 
   await renderAndResize();
@@ -227,7 +296,25 @@ async function initializePopup() {
   clockButton.addEventListener("click", toggleClock);
   popOutButton.addEventListener("click", openFloatingWindow);
   openSettingsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
-  chrome.storage.onChanged.addListener(renderAndResize);
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local" && areaName !== "sync") {
+      return;
+    }
+    if (changes[FLOATING_WINDOW_BOUNDS_KEY]) {
+      return;
+    }
+    void renderAndResize();
+  });
+
+  if (isFloatingWindow) {
+    window.addEventListener("resize", () => {
+      applyFloatingWindowScale();
+      scheduleFloatingWindowBoundsSave();
+    });
+    window.addEventListener("beforeunload", () => {
+      void saveFloatingWindowBounds();
+    });
+  }
 }
 
 initializePopup();

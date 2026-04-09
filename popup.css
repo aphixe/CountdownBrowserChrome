@@ -39,9 +39,18 @@ body {
   color: var(--text);
 }
 
+body.floating-window {
+  width: 100vw;
+  height: 100vh;
+}
+
 .popup-shell {
   padding: 14px;
   width: fit-content;
+}
+
+body.floating-window .popup-shell {
+  transform-origin: top left;
 }
 
 .card {
