@@ -1,6 +1,6 @@
 # ⏱️ Countdown Master Pro (Chrome Extension)
 
-**Countdown Master Pro** is a Chrome-based browser extension designed to **automatically track your immersion time**—no manual timers, no guesswork.
+**Countdown Master Pro** is a Chrome-based browser extension designed to **automatically track your immersion time**—no manual timers needed but you can manually start and stop the time, no guesswork.
 
 This project is a reimagined version of the original Countdown Pro Python app, built to work seamlessly in your browser while consuming any type of media.
 
