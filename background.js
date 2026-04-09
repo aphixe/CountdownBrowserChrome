@@ -38,11 +38,25 @@ async function updateActionIcon(settings) {
 
   iconState = nextState;
 
-  const emoji = nextState === "running" ? "😊" : "😐";
+  if (nextState === "running") {
+    const emoji = "⌛️";
+    await chrome.action.setIcon({
+      imageData: {
+        16: drawEmojiIcon(emoji, 16),
+        32: drawEmojiIcon(emoji, 32),
+        48: drawEmojiIcon(emoji, 48),
+        128: drawEmojiIcon(emoji, 128)
+      }
+    });
+    return;
+  }
+
   await chrome.action.setIcon({
-    imageData: {
-      16: drawEmojiIcon(emoji, 16),
-      32: drawEmojiIcon(emoji, 32)
+    path: {
+      16: "icons/icon-16.png",
+      32: "icons/icon-32.png",
+      48: "icons/icon-48.png",
+      128: "icons/icon-128.png"
     }
   });
 }
