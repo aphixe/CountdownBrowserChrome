@@ -89,9 +89,14 @@ body.floating-window .popup-shell {
   height: 28px;
   border-radius: 4px;
   border: 1px solid #666;
-  background: linear-gradient(180deg, #666, #4e4e4e);
-  color: #fff6e8;
+  background: #4a4d55;
+  color: #f6f8fc;
   padding: 0 8px;
+}
+
+.profile-row select option {
+  background: #2f333b;
+  color: #f6f8fc;
 }
 
 .top-bar-actions {
