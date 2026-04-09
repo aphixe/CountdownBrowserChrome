@@ -1,17 +1,11 @@
 const {
   buildExportCsv,
-  clearSyncFolderHandle,
   getProfile,
-  getSyncFolderHandle,
   loadSettings,
-  mergeImportedSessions,
   normalizeSettings,
   parseImportedSessions,
   saveSettings,
-  saveSyncFolderHandle,
   slugifyProfileName,
-  syncSettingsWithFolder,
-  verifyReadWritePermission
 } = window.CountDownPro;
 
 const dayStartInput = document.getElementById("dayStartInput");
@@ -29,10 +23,6 @@ const importStatus = document.getElementById("importStatus");
 const exportProfileSelect = document.getElementById("exportProfileSelect");
 const exportButton = document.getElementById("exportButton");
 const exportStatus = document.getElementById("exportStatus");
-const syncFolderNameInput = document.getElementById("syncFolderName");
-const pickSyncFolderButton = document.getElementById("pickSyncFolderButton");
-const clearSyncFolderButton = document.getElementById("clearSyncFolderButton");
-const syncStatus = document.getElementById("syncStatus");
 
 let draftSettings = null;
 
@@ -46,10 +36,6 @@ function setImportStatus(message) {
 
 function setExportStatus(message) {
   exportStatus.textContent = message;
-}
-
-function setSyncStatus(message) {
-  syncStatus.textContent = message;
 }
 
 function renderProfileGoalSelect() {
@@ -158,15 +144,6 @@ function renderProfilesList() {
 function renderOptions() {
   dayStartInput.value = draftSettings.dayStart;
   dayEndInput.value = draftSettings.dayEnd;
-  syncFolderNameInput.value = draftSettings.syncFolderName || "";
-  const syncMeta = [];
-  if (draftSettings.lastFolderSyncStatus) {
-    syncMeta.push(draftSettings.lastFolderSyncStatus);
-  }
-  if (draftSettings.lastFolderSyncAt) {
-    syncMeta.push(`Last sync: ${new Date(draftSettings.lastFolderSyncAt).toLocaleString()}`);
-  }
-  setSyncStatus(syncMeta.join(" "));
   renderProfilesList();
   renderProfileGoalSelect();
   renderImportProfileSelect();
@@ -287,72 +264,8 @@ async function saveOptions() {
   renderOptions();
 }
 
-async function chooseSyncFolder() {
-  if (typeof window.showDirectoryPicker !== "function") {
-    setSyncStatus("This browser does not support folder selection for extension pages.");
-    return;
-  }
-
-  try {
-    setSyncStatus("Requesting folder access...");
-    const directoryHandle = await window.showDirectoryPicker({
-      id: "countdown-pro-sync-folder",
-      mode: "readwrite"
-    });
-
-    const granted = await verifyReadWritePermission(directoryHandle, true);
-    if (!granted) {
-      setSyncStatus("Folder access was not granted.");
-      return;
-    }
-
-    await saveSyncFolderHandle(directoryHandle);
-    draftSettings.syncEnabled = true;
-    draftSettings.syncFolderName = directoryHandle.name || "";
-    draftSettings = await saveSettings(draftSettings);
-
-    setSyncStatus("Syncing folder...");
-    const result = await syncSettingsWithFolder({
-      directoryHandle,
-      promptForPermission: true
-    });
-
-    draftSettings = result.settings;
-    renderOptions();
-    setSyncStatus(
-      result.mode === "loaded"
-        ? "Folder linked. Existing CSV files were loaded."
-        : "Folder linked. No CSV files were found, so your current data was saved first."
-    );
-  } catch (error) {
-    if (error && error.name === "AbortError") {
-      setSyncStatus("Folder selection canceled.");
-      return;
-    }
-
-    setSyncStatus(error && error.message ? error.message : "Failed to link sync folder.");
-  }
-}
-
-async function clearSyncFolder() {
-  await clearSyncFolderHandle();
-  draftSettings.syncEnabled = false;
-  draftSettings.syncFolderName = "";
-  draftSettings.lastFolderSyncStatus = "";
-  draftSettings.lastFolderSyncAt = "";
-  draftSettings = await saveSettings(draftSettings);
-  renderOptions();
-  setSyncStatus("Sync folder cleared.");
-}
-
 async function initializeOptions() {
   draftSettings = await loadSettings();
-  const handle = await getSyncFolderHandle();
-  if (handle && !draftSettings.syncFolderName) {
-    draftSettings.syncFolderName = handle.name || "";
-    draftSettings.syncEnabled = true;
-    draftSettings = await saveSettings(draftSettings);
-  }
   renderOptions();
 
   addProfileButton.addEventListener("click", addProfile);
@@ -367,8 +280,6 @@ async function initializeOptions() {
   csvFileInput.addEventListener("change", () => setImportStatus(""));
   importButton.addEventListener("click", importCsv);
   exportButton.addEventListener("click", exportCsv);
-  pickSyncFolderButton.addEventListener("click", chooseSyncFolder);
-  clearSyncFolderButton.addEventListener("click", clearSyncFolder);
   saveButton.addEventListener("click", saveOptions);
 }
 

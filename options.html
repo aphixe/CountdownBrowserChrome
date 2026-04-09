@@ -87,24 +87,6 @@
         </div>
       </section>
 
-      <section class="panel sync-panel">
-        <div class="panel-head">
-          <h2>Network Sync Folder</h2>
-        </div>
-        <label>
-          <span>Selected folder</span>
-          <input id="syncFolderName" type="text" readonly placeholder="No folder selected">
-        </label>
-        <p class="hint">Uses `active.csv`, `passive.csv`, and `anki.csv`. On first sync it loads existing CSVs if found; otherwise it saves your current data first. After that it auto-loads and auto-saves every 5 minutes.</p>
-        <div class="footer import-actions">
-          <div id="syncStatus" class="save-status" aria-live="polite"></div>
-          <div class="profile-actions">
-            <button id="clearSyncFolderButton" class="secondary-button" type="button">Clear Folder</button>
-            <button id="pickSyncFolderButton" class="secondary-button" type="button">Choose Folder</button>
-          </div>
-        </div>
-      </section>
-
       <footer class="footer">
         <div id="saveStatus" class="save-status" aria-live="polite"></div>
         <button id="saveButton" class="primary-button" type="button">Save Settings</button>
