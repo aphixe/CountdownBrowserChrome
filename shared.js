@@ -14,6 +14,8 @@
     syncEnabled: false,
     lastFolderSyncAt: "",
     lastFolderSyncStatus: "",
+    autoProfileOverrideId: "",
+    autoProfilePreviousId: "",
     profiles: DEFAULT_PROFILES,
     sessions: []
   };
@@ -104,6 +106,8 @@
     settings.syncEnabled = Boolean(settings.syncEnabled);
     settings.lastFolderSyncAt = typeof settings.lastFolderSyncAt === "string" ? settings.lastFolderSyncAt : "";
     settings.lastFolderSyncStatus = typeof settings.lastFolderSyncStatus === "string" ? settings.lastFolderSyncStatus : "";
+    settings.autoProfileOverrideId = typeof settings.autoProfileOverrideId === "string" ? settings.autoProfileOverrideId : "";
+    settings.autoProfilePreviousId = typeof settings.autoProfilePreviousId === "string" ? settings.autoProfilePreviousId : "";
     settings.profiles = Array.isArray(settings.profiles) && settings.profiles.length
       ? settings.profiles.map((profile, index) => ({
           id: profile.id || `profile-${index + 1}`,

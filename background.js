@@ -6,6 +6,7 @@ const {
   getActiveSession,
   getProfile,
   loadSettings,
+  saveSettings,
   syncSettingsWithFolder,
   startClock,
   stopClock
@@ -13,6 +14,8 @@ const {
 
 let reconcileTimer = null;
 let iconState = null;
+const MIGAKU_STUDY_PROFILE_ID = "anki-migaku";
+const MIGAKU_STUDY_ORIGIN = "https://study.migaku.com";
 
 function drawEmojiIcon(emoji, size) {
   const canvas = new OffscreenCanvas(size, size);
@@ -69,13 +72,74 @@ function scheduleReconcile() {
   clearTimeout(reconcileTimer);
   reconcileTimer = setTimeout(() => {
     reconcileTimer = null;
-    void reconcileAudioClock();
+    void reconcileState();
   }, 250);
+}
+
+function isMigakuStudyUrl(urlString) {
+  if (!urlString) {
+    return false;
+  }
+  try {
+    const url = new URL(urlString);
+    if (url.origin !== MIGAKU_STUDY_ORIGIN) {
+      return false;
+    }
+    return url.pathname === "/study" || url.pathname.startsWith("/study/");
+  } catch {
+    return false;
+  }
 }
 
 async function hasAudibleTabs() {
   const tabs = await chrome.tabs.query({});
   return tabs.some((tab) => tab.audible);
+}
+
+async function hasMigakuStudyTabs() {
+  const tabs = await chrome.tabs.query({});
+  return tabs.some((tab) => isMigakuStudyUrl(tab.url));
+}
+
+async function reconcileAutoProfile() {
+  const settings = await loadSettings();
+  const hasStudyTab = await hasMigakuStudyTabs();
+
+  if (hasStudyTab) {
+    if (settings.activeProfileId !== MIGAKU_STUDY_PROFILE_ID) {
+      const nextSettings = {
+        ...settings,
+        autoProfilePreviousId: settings.autoProfilePreviousId || settings.activeProfileId,
+        autoProfileOverrideId: MIGAKU_STUDY_PROFILE_ID,
+        activeProfileId: MIGAKU_STUDY_PROFILE_ID
+      };
+      await saveSettings(nextSettings);
+    } else if (settings.autoProfileOverrideId !== MIGAKU_STUDY_PROFILE_ID) {
+      await saveSettings({
+        ...settings,
+        autoProfileOverrideId: MIGAKU_STUDY_PROFILE_ID,
+        autoProfilePreviousId: settings.autoProfilePreviousId
+      });
+    }
+    return;
+  }
+
+  if (settings.autoProfileOverrideId === MIGAKU_STUDY_PROFILE_ID) {
+    const fallbackId = settings.autoProfilePreviousId && settings.profiles.some((profile) => profile.id === settings.autoProfilePreviousId)
+      ? settings.autoProfilePreviousId
+      : settings.profiles[0].id;
+    await saveSettings({
+      ...settings,
+      activeProfileId: fallbackId,
+      autoProfileOverrideId: "",
+      autoProfilePreviousId: ""
+    });
+  }
+}
+
+async function reconcileState() {
+  await reconcileAutoProfile();
+  await reconcileAudioClock();
 }
 
 async function reconcileAudioClock() {
@@ -148,7 +212,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
-  if ("audible" in changeInfo || "status" in changeInfo || "mutedInfo" in changeInfo) {
+  if ("audible" in changeInfo || "status" in changeInfo || "mutedInfo" in changeInfo || "url" in changeInfo) {
     scheduleReconcile();
   }
 });
