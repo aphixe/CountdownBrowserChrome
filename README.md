@@ -1,100 +1,52 @@
-# CountDown Pro
+# ⏱️ Countdown Master Pro (Chrome Extension)
 
-CountDown Pro is a Chromium browser extension for tracking focused time across named profiles. It gives you a quick timer in the toolbar popup, profile-based daily goals, streak tracking, yearly totals, a heatmap, a weekly calendar view, and a trends graph.
+**Countdown Master Pro** is a Chrome-based browser extension designed to **automatically track your immersion time**—no manual timers, no guesswork.
 
-It is built as a plain Manifest V3 extension, so there is no build step required. You can load this project directly into Chrome, Brave, Edge, Opera, or most other Chrome-based browsers as an unpacked extension.
+This project is a reimagined version of the original Countdown Pro Python app, built to work seamlessly in your browser while consuming any type of media.
 
-## What It Does
+---
 
-- Tracks timed sessions per profile
-- Lets you switch between profiles like `Activate Immersion`, `Passive Immersion`, and `Anki/Migaku`
-- Shows today's timer, day time remaining, yearly total, current streak, and longest streak
-- Displays goal progress and counts streaks after a profile reaches its daily goal
-- Includes a calendar view for reviewing time blocks
-- Includes a trends graph for viewing progress over time
-- Lets you configure your tracking day window and profile goals
-- Supports CSV import and export for saved session data
+## 🚀 Features
 
-## Project Structure
+### 🎧 Automatic Time Tracking
+- Detects when audio is playing and **automatically starts/stops tracking**
+- Works across **any media** (YouTube, Netflix, podcasts, etc.)
+- No manual input required
 
-- `manifest.json` - Chrome extension manifest
-- `popup.html` / `popup.js` - main extension popup UI
-- `options.html` / `options.js` - settings page
-- `calendar.html` / `calendar.js` - calendar view
-- `trends.html` / `trends.js` - trends graph view
-- `background.js` - background service worker
-- `shared.js` - shared logic for settings, sessions, totals, and formatting
-- `icons/` - extension icons and UI assets
+### 🧠 Migaku / Anki Integration
+- When using the **Migaku Memory site**, time is automatically recorded to your profile
+- Designed to integrate with immersion-based learning workflows
+- Note: timing may not be perfectly precise, but it is **fully automated**
 
-## Install In Chrome, Brave, Edge, Or Another Chromium Browser
+### 👤 Profiles
+- Create and manage multiple profiles
+- Track immersion time separately for different goals or users
 
-These steps are almost the same in every Chrome-based browser.
+### 📅 Calendar View
+- Visual blocks showing your immersion sessions
+- Easy way to see **when and how long** you studied
 
-### 1. Download or Clone This Project
+### 📈 Trends View
+- Graph-based overview of your total immersion time
+- Track progress over days, weeks, or longer periods
 
-If you already have the folder on your computer, you can use it directly.
+### 🎯 Super Goal System
+- Set a **daily time goal** (hours + minutes)
+- Fully customizable in settings
+- Helps you stay consistent and accountable
 
-Otherwise:
+### 📤 CSV Export / Import
+- Export your data as a `.csv` file
+- Easily transfer your progress to another browser or machine
+- Great for backups
 
-```powershell
-git clone https://github.com/your-username/CountdownBrowserChrome.git
-```
+---
 
-Or download the repository as a ZIP from GitHub and extract it.
+## 🧩 Installation (Chrome / Chromium Browsers)
 
-### 2. Open The Extensions Page
+Since this extension is not on the Chrome Web Store, you’ll install it manually:
 
-Use the extensions page for your browser:
-
-- Chrome: `chrome://extensions`
-- Brave: `brave://extensions`
-- Edge: `edge://extensions`
-- Opera: `opera://extensions`
-
-If you use another Chromium-based browser, open its extensions page and look for developer tools or unpacked extension loading.
-
-### 3. Turn On Developer Mode
-
-Enable `Developer mode` on the extensions page. In most browsers this is a toggle near the top-right.
-
-### 4. Load The Extension
-
-Click `Load unpacked`, then select the project folder:
-
-```text
-CountdownBrowserChrome
-```
-
-Select the folder that contains `manifest.json`.
-
-### 5. Pin And Open It
-
-After the extension loads:
-
-- Pin `CountDown Pro` to the toolbar if you want quick access
-- Click the extension icon to open the popup
-- Open `Settings` to configure your day window, goals, and profiles
-
-## Updating After You Change The Code
-
-If you edit the extension locally:
-
-1. Save your file changes.
-2. Go back to the browser's extensions page.
-3. Click `Reload` on the CountDown Pro extension card.
-
-Then reopen the popup or settings page to test the changes.
-
-## Permissions
-
-This extension currently uses:
-
-- `storage` for saving settings and tracked sessions
-- `tabs` for tab-based background behavior
-- `alarms` for scheduled background syncing/tasks
-
-## Notes
-
-- This project is a local/unpacked extension, not a Chrome Web Store package.
-- Because it is a Manifest V3 extension, the background logic runs through `background.js` as a service worker.
-- Most Chromium browsers support the same loading flow, so the install process is nearly identical across Chrome, Brave, Edge, and similar browsers.
+### Step 1: Download the Project
+- Clone or download this repository:
+```bash
+git clone https://github.com/YOUR_USERNAME/countdown-master-pro.git
