@@ -11,7 +11,8 @@ const {
 const dayStartInput = document.getElementById("dayStartInput");
 const dayEndInput = document.getElementById("dayEndInput");
 const profileGoalSelect = document.getElementById("profileGoalSelect");
-const superGoalInput = document.getElementById("superGoalInput");
+const superGoalHoursInput = document.getElementById("superGoalHoursInput");
+const superGoalMinutesInput = document.getElementById("superGoalMinutesInput");
 const profilesList = document.getElementById("profilesList");
 const addProfileButton = document.getElementById("addProfileButton");
 const saveButton = document.getElementById("saveButton");
@@ -38,6 +39,30 @@ function setExportStatus(message) {
   exportStatus.textContent = message;
 }
 
+function splitGoalMinutes(totalMinutes) {
+  const safeMinutes = Math.max(1, Number(totalMinutes) || 30);
+  return {
+    hours: Math.floor(safeMinutes / 60),
+    minutes: safeMinutes % 60
+  };
+}
+
+function renderGoalInputs(totalMinutes) {
+  const { hours, minutes } = splitGoalMinutes(totalMinutes);
+  superGoalHoursInput.value = String(hours);
+  superGoalMinutesInput.value = String(minutes);
+}
+
+function getGoalMinutesFromInputs() {
+  const hours = Math.max(0, Number(superGoalHoursInput.value) || 0);
+  const minutes = Math.max(0, Math.min(59, Number(superGoalMinutesInput.value) || 0));
+
+  superGoalHoursInput.value = String(hours);
+  superGoalMinutesInput.value = String(minutes);
+
+  return Math.max(1, (hours * 60) + minutes);
+}
+
 function renderProfileGoalSelect() {
   const currentValue = profileGoalSelect.value || draftSettings.activeProfileId;
   profileGoalSelect.innerHTML = "";
@@ -53,7 +78,7 @@ function renderProfileGoalSelect() {
   }
 
   const selectedProfile = getProfile(draftSettings, profileGoalSelect.value || draftSettings.activeProfileId);
-  superGoalInput.value = selectedProfile.superGoalMinutes;
+  renderGoalInputs(selectedProfile.superGoalMinutes);
 }
 
 function renderImportProfileSelect() {
@@ -167,7 +192,7 @@ function syncDraftFromInputs() {
 
   const selectedProfile = draftSettings.profiles.find((profile) => profile.id === profileGoalSelect.value);
   if (selectedProfile) {
-    selectedProfile.superGoalMinutes = Math.max(1, Number(superGoalInput.value) || 30);
+    selectedProfile.superGoalMinutes = getGoalMinutesFromInputs();
   }
 
   draftSettings.profiles = draftSettings.profiles.map((profile, index) => ({
@@ -272,9 +297,10 @@ async function initializeOptions() {
   profileGoalSelect.addEventListener("change", () => {
     syncDraftFromInputs();
     const selectedProfile = getProfile(draftSettings, profileGoalSelect.value);
-    superGoalInput.value = selectedProfile.superGoalMinutes;
+    renderGoalInputs(selectedProfile.superGoalMinutes);
   });
-  superGoalInput.addEventListener("input", () => setStatus(""));
+  superGoalHoursInput.addEventListener("input", () => setStatus(""));
+  superGoalMinutesInput.addEventListener("input", () => setStatus(""));
   dayStartInput.addEventListener("input", () => setStatus(""));
   dayEndInput.addEventListener("input", () => setStatus(""));
   csvFileInput.addEventListener("change", () => setImportStatus(""));

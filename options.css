@@ -88,6 +88,25 @@ label {
   margin-bottom: 14px;
 }
 
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.goal-time-group {
+  margin-bottom: 14px;
+}
+
+.goal-time-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.goal-time-field {
+  margin-bottom: 0;
+}
+
 input,
 select,
 .secondary-button,
@@ -177,5 +196,9 @@ button {
   .footer {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .goal-time-inputs {
+    grid-template-columns: 1fr;
   }
 }

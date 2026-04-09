@@ -37,10 +37,19 @@
             <span>Profile</span>
             <select id="profileGoalSelect"></select>
           </label>
-          <label>
-            <span>Super goal in minutes</span>
-            <input id="superGoalInput" type="number" min="1" step="1">
-          </label>
+          <div class="goal-time-group">
+            <span class="field-label">Super goal</span>
+            <div class="goal-time-inputs">
+              <label class="goal-time-field">
+                <span>Hours</span>
+                <input id="superGoalHoursInput" type="number" min="0" step="1" inputmode="numeric">
+              </label>
+              <label class="goal-time-field">
+                <span>Minutes</span>
+                <input id="superGoalMinutesInput" type="number" min="0" max="59" step="1" inputmode="numeric">
+              </label>
+            </div>
+          </div>
           <p class="hint">A day counts toward your streak after this goal is reached.</p>
         </article>
       </section>
