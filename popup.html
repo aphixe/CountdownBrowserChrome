@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CountDown Pro</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup-shell">
+    <section class="card">
+      <div class="top-bar">
+        <label class="profile-row">
+          <span>Profile</span>
+          <select id="profileSelect" aria-label="Profile"></select>
+        </label>
+        <button id="openSettingsButton" class="icon-button" type="button" title="Settings" aria-label="Settings">
+          &#9881;
+        </button>
+      </div>
+
+      <div class="timer-block">
+        <div id="todayTimer" class="timer-value">00:00:00</div>
+        <div id="dayTimeLeft" class="day-left">Day time left: 00:00:00</div>
+      </div>
+
+      <div class="summary-row">
+        <div class="year-total-wrap">
+          <span class="summary-label">Year total:</span>
+          <span id="yearTotal" class="summary-value">00:00:00</span>
+        </div>
+      </div>
+
+      <section id="heatmap" class="heatmap" aria-label="Year activity heatmap"></section>
+
+      <div class="streak-row">
+        <div><span class="summary-label">Longest streak:</span> <span id="longestStreak">0 days</span></div>
+        <div><span class="summary-label">Current streak:</span> <span id="currentStreak">0 days</span></div>
+      </div>
+
+      <div class="goal-row">
+        <span id="goalLabel">Super goal: 30m</span>
+      </div>
+
+      <div class="button-row">
+        <button id="clockButton" class="clock-button" type="button">Clock On</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="shared.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

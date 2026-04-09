@@ -1,0 +1,181 @@
+:root {
+  color-scheme: dark;
+  --bg: #161b22;
+  --bg-2: #202732;
+  --panel: rgba(24, 31, 41, 0.92);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --text: #ecf1f6;
+  --muted: #9ba7b7;
+  --accent: #6fd1ff;
+  --accent-2: #efb0e3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top, rgba(111, 209, 255, 0.14), transparent 35%),
+    linear-gradient(180deg, var(--bg), var(--bg-2));
+}
+
+.page {
+  padding: 24px;
+}
+
+.settings-card {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px;
+  border-radius: 22px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+.subtext,
+.hint,
+.save-status {
+  color: var(--muted);
+}
+
+.section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.panel {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--panel-border);
+}
+
+.panel-head,
+.footer,
+.profile-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+input,
+select,
+.secondary-button,
+.primary-button {
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 15, 21, 0.85);
+  color: var(--text);
+  padding: 0 12px;
+  font: inherit;
+}
+
+.profiles-panel {
+  margin-top: 18px;
+}
+
+.import-panel {
+  margin-top: 18px;
+}
+
+.export-panel {
+  margin-top: 18px;
+}
+
+.sync-panel {
+  margin-top: 18px;
+}
+
+#syncFolderName[readonly] {
+  opacity: 0.85;
+}
+
+.profiles-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.profile-item {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.profile-item input {
+  flex: 1;
+}
+
+.profile-actions {
+  display: flex;
+  gap: 8px;
+}
+
+button {
+  cursor: pointer;
+}
+
+.secondary-button {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.primary-button {
+  min-width: 160px;
+  border: none;
+  color: #102e3f;
+  background: linear-gradient(180deg, #86e0ff, #59c9ff);
+}
+
+.footer {
+  margin-top: 20px;
+}
+
+.import-actions {
+  margin-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 14px;
+  }
+
+  .settings-card {
+    padding: 16px;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

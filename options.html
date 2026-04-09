@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CountDown Pro Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="page">
+    <section class="settings-card">
+      <header class="header">
+        <div>
+          <p class="eyebrow">CountDown Pro</p>
+          <h1>Settings</h1>
+          <p class="subtext">Set the daily tracking window, super goal, and your profile list.</p>
+        </div>
+      </header>
+
+      <section class="section-grid">
+        <article class="panel">
+          <h2>Daily Window</h2>
+          <label>
+            <span>Start of day</span>
+            <input id="dayStartInput" type="time">
+          </label>
+          <label>
+            <span>End of day</span>
+            <input id="dayEndInput" type="time">
+          </label>
+          <p class="hint">Default day runs from 7:00 AM to 11:00 PM.</p>
+        </article>
+
+        <article class="panel">
+          <h2>Profile Goal</h2>
+          <label>
+            <span>Profile</span>
+            <select id="profileGoalSelect"></select>
+          </label>
+          <label>
+            <span>Super goal in minutes</span>
+            <input id="superGoalInput" type="number" min="1" step="1">
+          </label>
+          <p class="hint">A day counts toward your streak after this goal is reached.</p>
+        </article>
+      </section>
+
+      <section class="panel profiles-panel">
+        <div class="panel-head">
+          <h2>Profiles</h2>
+          <button id="addProfileButton" class="secondary-button" type="button">Add Profile</button>
+        </div>
+        <div id="profilesList" class="profiles-list"></div>
+      </section>
+
+      <section class="panel import-panel">
+        <div class="panel-head">
+          <h2>CSV Import</h2>
+        </div>
+        <label>
+          <span>Import into profile</span>
+          <select id="importProfileSelect"></select>
+        </label>
+        <label>
+          <span>CSV file</span>
+          <input id="csvFileInput" type="file" accept=".csv,text/csv">
+        </label>
+        <p class="hint">Expected columns: `date`, `start_time`, `end_time`, `duration_seconds`, `goal_seconds`, `label`.</p>
+        <div class="footer import-actions">
+          <div id="importStatus" class="save-status" aria-live="polite"></div>
+          <button id="importButton" class="secondary-button" type="button">Import CSV</button>
+        </div>
+      </section>
+
+      <section class="panel export-panel">
+        <div class="panel-head">
+          <h2>CSV Export</h2>
+        </div>
+        <label>
+          <span>Export profile</span>
+          <select id="exportProfileSelect"></select>
+        </label>
+        <p class="hint">Exports every saved session for that profile using the same CSV columns and layout.</p>
+        <div class="footer import-actions">
+          <div id="exportStatus" class="save-status" aria-live="polite"></div>
+          <button id="exportButton" class="secondary-button" type="button">Export CSV</button>
+        </div>
+      </section>
+
+      <section class="panel sync-panel">
+        <div class="panel-head">
+          <h2>Network Sync Folder</h2>
+        </div>
+        <label>
+          <span>Selected folder</span>
+          <input id="syncFolderName" type="text" readonly placeholder="No folder selected">
+        </label>
+        <p class="hint">Uses `active.csv`, `passive.csv`, and `anki.csv`. On first sync it loads existing CSVs if found; otherwise it saves your current data first. After that it auto-loads and auto-saves every 5 minutes.</p>
+        <div class="footer import-actions">
+          <div id="syncStatus" class="save-status" aria-live="polite"></div>
+          <div class="profile-actions">
+            <button id="clearSyncFolderButton" class="secondary-button" type="button">Clear Folder</button>
+            <button id="pickSyncFolderButton" class="secondary-button" type="button">Choose Folder</button>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div id="saveStatus" class="save-status" aria-live="polite"></div>
+        <button id="saveButton" class="primary-button" type="button">Save Settings</button>
+      </footer>
+    </section>
+  </main>
+
+  <script src="shared.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
