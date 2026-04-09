@@ -50,6 +50,12 @@
     return next;
   }
 
+  function addCalendarDays(date, days) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next;
+  }
+
   function getWindowForDate(date, settings) {
     const start = applyTime(date, settings.dayStart);
     let end = applyTime(date, settings.dayEnd);
@@ -61,14 +67,14 @@
 
   function getTrackingWindowForDate(date, settings) {
     const anchor = applyTime(date, settings.dayStart);
-    const start = date < anchor ? new Date(anchor.getTime() - 86400000) : anchor;
-    const end = new Date(start.getTime() + 86400000);
+    const start = date < anchor ? addCalendarDays(anchor, -1) : anchor;
+    const end = addCalendarDays(start, 1);
     return { start, end };
   }
 
   function getTrackingWindowForDayKey(dayKey, settings) {
     const start = applyTime(parseDayKey(dayKey), settings.dayStart);
-    const end = new Date(start.getTime() + 86400000);
+    const end = addCalendarDays(start, 1);
     return { start, end };
   }
 
@@ -173,7 +179,7 @@
 
     while (cursor.getTime() < endMs) {
       const start = cursor;
-      const end = new Date(start.getTime() + 86400000);
+      const end = addCalendarDays(start, 1);
       const chunkStart = Math.max(startMs, start.getTime());
       const chunkEnd = Math.min(endMs, end.getTime());
 
@@ -184,7 +190,7 @@
         });
       }
 
-      cursor = new Date(cursor.getTime() + 86400000);
+      cursor = addCalendarDays(cursor, 1);
     }
 
     return chunks;
@@ -212,6 +218,24 @@
       for (const chunk of splitSessionByDay(startMs, endMs, settings)) {
         totals[chunk.dayKey] = (totals[chunk.dayKey] || 0) + chunk.durationSeconds;
       }
+    }
+    return totals;
+  }
+
+  function buildCalendarDayTotals(settings, profileId, now = new Date()) {
+    const totals = {};
+    for (const session of getProfileSessions(settings, profileId, now)) {
+      const startDate = new Date(session.startedAt);
+      const endDate = new Date(session.endedAt);
+      const startMs = startDate.getTime();
+      const endMs = endDate.getTime();
+
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+        continue;
+      }
+
+      const dayKey = formatDayKey(startDate);
+      totals[dayKey] = (totals[dayKey] || 0) + Math.floor((endMs - startMs) / 1000);
     }
     return totals;
   }
@@ -250,7 +274,7 @@
   }
 
   function getStreakStats(settings, profileId, now = new Date()) {
-    const totals = buildDailyTotals(settings, profileId, now);
+    const totals = buildCalendarDayTotals(settings, profileId, now);
     const profile = getProfile(settings, profileId);
     const goalSeconds = profile.superGoalMinutes * 60;
     const completedDays = Object.keys(totals)
@@ -275,18 +299,17 @@
       longestStreak = Math.max(longestStreak, running);
     }
 
-    const todayKey = getTrackingDayKey(now, settings);
-    const todayWindow = getTrackingWindowForDayKey(todayKey, settings);
-    const todayComplete = totals[todayKey] >= goalSeconds;
-    const streakEndKey = todayComplete
-      ? todayKey
-      : formatDayKey(new Date(parseDayKey(todayKey).getTime() - 86400000));
+    const latestCompletedDay = completedDays[completedDays.length - 1];
+    if (latestCompletedDay) {
+      const todayKey = formatDayKey(now);
+      const yesterdayKey = formatDayKey(addCalendarDays(parseDayKey(todayKey), -1));
 
-    if (completedDays.length && now < todayWindow.end) {
-      let targetDate = parseDayKey(streakEndKey);
-      while (totals[formatDayKey(targetDate)] >= goalSeconds) {
-        currentStreak += 1;
-        targetDate = new Date(targetDate.getTime() - 86400000);
+      if (latestCompletedDay >= yesterdayKey) {
+        let targetDate = parseDayKey(latestCompletedDay);
+        while (totals[formatDayKey(targetDate)] >= goalSeconds) {
+          currentStreak += 1;
+          targetDate = addCalendarDays(targetDate, -1);
+        }
       }
     }
 
