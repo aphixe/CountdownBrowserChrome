@@ -50,3 +50,17 @@ Since this extension is not on the Chrome Web Store, you’ll install it manuall
 - Clone or download this repository:
 ```bash
 git clone https://github.com/YOUR_USERNAME/countdown-master-pro.git
+
+
+### Step 2: Open Extensions Page
+Open Chrome (or any Chromium browser)
+Go to:
+- chrome://extensions/
+### Step 3: Enable Developer Mode
+Toggle Developer mode (top-right corner)
+### Step 4: Load the Extension
+Click "Load unpacked"
+Select the folder where this project is located (the root folder containing manifest.json)
+### Step 5: Done ✅
+The extension should now appear in your browser
+Pin it to your toolbar for easy access
