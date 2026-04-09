@@ -47,9 +47,9 @@ This project is a reimagined version of the original Countdown Pro Python app, b
 Since this extension is not on the Chrome Web Store, you’ll install it manually:
 
 ### Step 1: Download the Project
-- Clone or download this repository:
+- Clone or download this repository via download zip in the green code button and unzip it:
 ```bash
-git clone https://github.com/YOUR_USERNAME/countdown-master-pro.git
+git clone https://github.com/aphixe/CountdownBrowserChrome.git
 
 
 ### Step 2: Open Extensions Page
