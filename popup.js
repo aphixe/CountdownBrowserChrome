@@ -17,6 +17,7 @@ const {
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const profileSelect = document.getElementById("profileSelect");
+const popOutButton = document.getElementById("popOutButton");
 const openSettingsButton = document.getElementById("openSettingsButton");
 const todayTimer = document.getElementById("todayTimer");
 const dayTimeLeft = document.getElementById("dayTimeLeft");
@@ -28,6 +29,8 @@ const heatmap = document.getElementById("heatmap");
 const clockButton = document.getElementById("clockButton");
 
 let liveIntervalId = null;
+const isFloatingWindow = new URLSearchParams(window.location.search).get("mode") === "window";
+let lastFloatingSize = { width: 0, height: 0 };
 
 function renderProfiles(settings) {
   const extraOptions = [
@@ -135,6 +138,36 @@ async function render() {
   clockButton.dataset.running = activeSession ? "true" : "false";
 }
 
+async function resizeFloatingWindowToFit() {
+  if (!isFloatingWindow) {
+    return;
+  }
+
+  const shell = document.querySelector(".popup-shell");
+  const shellRect = shell ? shell.getBoundingClientRect() : document.body.getBoundingClientRect();
+  const frameWidth = Math.max(window.outerWidth - window.innerWidth, 0);
+  const frameHeight = Math.max(window.outerHeight - window.innerHeight, 0);
+  const width = Math.ceil(shellRect.width + frameWidth);
+  const height = Math.ceil(shellRect.height + frameHeight);
+
+  if (width === lastFloatingSize.width && height === lastFloatingSize.height) {
+    return;
+  }
+
+  lastFloatingSize = { width, height };
+
+  const currentWindow = await chrome.windows.getCurrent();
+  await chrome.windows.update(currentWindow.id, {
+    width,
+    height
+  });
+}
+
+async function renderAndResize() {
+  await render();
+  await resizeFloatingWindowToFit();
+}
+
 async function handleProfileChange(event) {
   const value = event.target.value;
   const settings = await loadSettings();
@@ -147,7 +180,7 @@ async function handleProfileChange(event) {
 
   settings.activeProfileId = value;
   await saveSettings(settings);
-  await render();
+  await renderAndResize();
 }
 
 async function toggleClock() {
@@ -161,11 +194,28 @@ async function toggleClock() {
     await startClock(profile.id);
   }
 
-  await render();
+  await renderAndResize();
+}
+
+async function openFloatingWindow() {
+  await chrome.windows.create({
+    url: chrome.runtime.getURL("popup.html?mode=window"),
+    type: "popup",
+    width: 560,
+    height: 320,
+    focused: true
+  });
+
+  window.close();
 }
 
 async function initializePopup() {
-  await render();
+  if (isFloatingWindow) {
+    popOutButton.hidden = true;
+    document.title = "CountDown Pro Floating";
+  }
+
+  await renderAndResize();
 
   if (liveIntervalId) {
     clearInterval(liveIntervalId);
@@ -175,8 +225,9 @@ async function initializePopup() {
 
   profileSelect.addEventListener("change", handleProfileChange);
   clockButton.addEventListener("click", toggleClock);
+  popOutButton.addEventListener("click", openFloatingWindow);
   openSettingsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
-  chrome.storage.onChanged.addListener(render);
+  chrome.storage.onChanged.addListener(renderAndResize);
 }
 
 initializePopup();

@@ -23,6 +23,11 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   width: fit-content;
@@ -58,6 +63,10 @@ body {
   justify-content: space-between;
 }
 
+.top-bar {
+  gap: 12px;
+}
+
 .profile-row {
   display: flex;
   align-items: center;
@@ -76,6 +85,12 @@ body {
   padding: 0 8px;
 }
 
+.top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .icon-button {
   width: 30px;
   height: 30px;
@@ -89,6 +104,10 @@ body {
 
 .icon-button:hover {
   background: rgba(255, 255, 255, 0.16);
+}
+
+.icon-button[hidden] {
+  display: none;
 }
 
 .timer-block {
