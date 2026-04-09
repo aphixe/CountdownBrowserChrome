@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CountDown Pro Trends</title>
+  <link rel="icon" href="icons/graph.png">
+  <link rel="stylesheet" href="trends.css">
+</head>
+<body>
+  <main class="page-shell">
+    <section class="trends-card">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">CountDown Pro</p>
+          <h1>Trends Graph</h1>
+          <p id="pageSubtitle" class="subtext">Weekly scale across a year, with each profile shown in its own color.</p>
+        </div>
+        <div class="header-actions">
+          <label class="control">
+            <span>Scale</span>
+            <select id="scaleSelect">
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+              <option value="year">Year</option>
+            </select>
+          </label>
+          <label class="control">
+            <span>Range</span>
+            <select id="rangeSelect">
+              <option value="7">7 days</option>
+              <option value="30">30 days</option>
+              <option value="365">Year</option>
+            </select>
+          </label>
+          <div class="nav-group">
+            <button id="previousButton" class="nav-button" type="button" aria-label="Previous range">&lt;</button>
+            <button id="nextButton" class="nav-button" type="button" aria-label="Next range">&gt;</button>
+          </div>
+        </div>
+      </header>
+
+      <section class="legend-panel">
+        <div class="legend-head">
+          <h2>Legend</h2>
+          <label class="zoom-control">
+            <span>Zoom</span>
+            <input id="zoomSlider" type="range" min="50" max="200" value="100">
+            <strong id="zoomValue">100%</strong>
+          </label>
+        </div>
+        <div id="legendGrid" class="legend-grid"></div>
+      </section>
+
+      <section class="graph-panel">
+        <div class="graph-scroll">
+          <canvas id="graphCanvas"></canvas>
+        </div>
+        <div id="graphTooltip" class="graph-tooltip" hidden></div>
+      </section>
+    </section>
+  </main>
+
+  <script src="shared.js"></script>
+  <script src="trends.js"></script>
+</body>
+</html>

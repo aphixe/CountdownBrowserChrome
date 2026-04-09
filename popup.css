@@ -116,6 +116,19 @@ body.floating-window .popup-shell {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.icon-button-image {
+  padding: 0;
+  overflow: hidden;
+}
+
+.icon-button-image img {
+  width: 29px;
+  height: 29px;
+  display: block;
+  object-fit: cover;
+  filter: drop-shadow(0 0 6px rgba(103, 207, 255, 0.28));
+}
+
 .icon-button:hover {
   background: rgba(255, 255, 255, 0.16);
 }

@@ -17,13 +17,19 @@ const {
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const defaultFloatingIconHref = chrome.runtime.getURL("icons/icon-128.png");
 const FLOATING_WINDOW_BOUNDS_KEY = "floatingWindowBounds";
+const TRENDS_WINDOW_BOUNDS_KEY = "trendsWindowBounds";
 const DEFAULT_FLOATING_WINDOW_BOUNDS = {
   width: 620,
   height: 430
 };
+const DEFAULT_TRENDS_WINDOW_BOUNDS = {
+  width: 1240,
+  height: 700
+};
 
 const profileSelect = document.getElementById("profileSelect");
 const popOutButton = document.getElementById("popOutButton");
+const openTrendsButton = document.getElementById("openTrendsButton");
 const openSettingsButton = document.getElementById("openSettingsButton");
 const todayTimer = document.getElementById("todayTimer");
 const dayTimeLeft = document.getElementById("dayTimeLeft");
@@ -165,6 +171,20 @@ async function getStoredFloatingWindowBounds() {
   };
 }
 
+async function getStoredTrendsWindowBounds() {
+  const result = await chrome.storage.local.get(TRENDS_WINDOW_BOUNDS_KEY);
+  const bounds = result[TRENDS_WINDOW_BOUNDS_KEY];
+
+  if (!bounds || typeof bounds.width !== "number" || typeof bounds.height !== "number") {
+    return DEFAULT_TRENDS_WINDOW_BOUNDS;
+  }
+
+  return {
+    width: Math.round(bounds.width),
+    height: Math.round(bounds.height)
+  };
+}
+
 async function saveFloatingWindowBounds() {
   if (!isFloatingWindow) {
     return;
@@ -285,6 +305,18 @@ async function openFloatingWindow() {
   window.close();
 }
 
+async function openTrendsWindow() {
+  const bounds = await getStoredTrendsWindowBounds();
+
+  await chrome.windows.create({
+    url: chrome.runtime.getURL("trends.html"),
+    type: "popup",
+    width: bounds.width,
+    height: bounds.height,
+    focused: true
+  });
+}
+
 async function initializePopup() {
   if (isFloatingWindow) {
     popOutButton.hidden = true;
@@ -303,6 +335,7 @@ async function initializePopup() {
   profileSelect.addEventListener("change", handleProfileChange);
   clockButton.addEventListener("click", toggleClock);
   popOutButton.addEventListener("click", openFloatingWindow);
+  openTrendsButton.addEventListener("click", openTrendsWindow);
   openSettingsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local" && areaName !== "sync") {

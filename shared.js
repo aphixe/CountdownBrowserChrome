@@ -25,6 +25,19 @@
     "passive-immersion": "passive.csv",
     "anki-migaku": "anki.csv"
   };
+  const PROFILE_COLOR_PALETTE = [
+    "#38bdf8",
+    "#f472b6",
+    "#22c55e",
+    "#f59e0b",
+    "#ef4444",
+    "#a855f7",
+    "#14b8a6",
+    "#eab308"
+  ];
+  const ACTIVE_GRAPH_LINE_COLOR = "#6dd3fb";
+  const ACTIVE_GRAPH_DOT_COLOR = "#ebb6e8";
+  const ACTIVE_GRAPH_FILL_COLOR = "#6dd3fb";
   const SYNC_ALARM_NAME = "folder-sync";
   const SYNC_INTERVAL_MINUTES = 5;
   const DIRECTORY_DB_NAME = "countdown-pro-sync";
@@ -166,6 +179,44 @@
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || `profile-${Date.now()}`;
+  }
+
+  function getPaletteProfileColor(label) {
+    const text = String(label || "").trim().toLowerCase();
+    const seed = Array.from(text).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return PROFILE_COLOR_PALETTE[seed % PROFILE_COLOR_PALETTE.length] || ACTIVE_GRAPH_LINE_COLOR;
+  }
+
+  function getGraphColorsForProfile(profile, activeProfileId) {
+    if (profile.id === activeProfileId) {
+      return {
+        lineColor: ACTIVE_GRAPH_LINE_COLOR,
+        dotColor: ACTIVE_GRAPH_DOT_COLOR,
+        fillColor: ACTIVE_GRAPH_FILL_COLOR
+      };
+    }
+
+    const paletteColor = getPaletteProfileColor(profile.name);
+    return {
+      lineColor: paletteColor,
+      dotColor: paletteColor,
+      fillColor: paletteColor
+    };
+  }
+
+  function buildGraphSeries(settings, now = new Date()) {
+    return settings.profiles.map((profile) => {
+      const colors = getGraphColorsForProfile(profile, settings.activeProfileId);
+      return {
+        id: profile.id,
+        label: profile.name,
+        totals: buildDailyTotals(settings, profile.id, now),
+        lineColor: colors.lineColor,
+        dotColor: colors.dotColor,
+        fillColor: colors.fillColor,
+        isActive: profile.id === settings.activeProfileId
+      };
+    });
   }
 
   function getActiveSession(settings, profileId) {
@@ -714,6 +765,7 @@
     SYNC_INTERVAL_MINUTES,
     DEFAULT_PROFILES,
     buildDailyTotals,
+    buildGraphSeries,
     buildExportCsv,
     clearSyncFolderHandle,
     createLocalDate,
@@ -722,6 +774,8 @@
     getActiveSession,
     getDayTimeLeftSeconds,
     getProfile,
+    getGraphColorsForProfile,
+    getPaletteProfileColor,
     getSyncFolderHandle,
     getStreakStats,
     getTodayStats,
