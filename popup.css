@@ -121,6 +121,16 @@ body.floating-window .popup-shell {
   overflow: hidden;
 }
 
+.icon-button-emoji {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.icon-button-emoji span {
+  display: inline-block;
+  transform: translateY(1px);
+}
+
 .icon-button-image img {
   width: 29px;
   height: 29px;

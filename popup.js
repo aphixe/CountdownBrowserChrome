@@ -18,6 +18,7 @@ const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep
 const defaultFloatingIconHref = chrome.runtime.getURL("icons/icon-128.png");
 const FLOATING_WINDOW_BOUNDS_KEY = "floatingWindowBounds";
 const TRENDS_WINDOW_BOUNDS_KEY = "trendsWindowBounds";
+const CALENDAR_WINDOW_BOUNDS_KEY = "calendarWindowBounds";
 const DEFAULT_FLOATING_WINDOW_BOUNDS = {
   width: 620,
   height: 430
@@ -26,10 +27,15 @@ const DEFAULT_TRENDS_WINDOW_BOUNDS = {
   width: 1240,
   height: 700
 };
+const DEFAULT_CALENDAR_WINDOW_BOUNDS = {
+  width: 1480,
+  height: 1100
+};
 
 const profileSelect = document.getElementById("profileSelect");
 const popOutButton = document.getElementById("popOutButton");
 const openTrendsButton = document.getElementById("openTrendsButton");
+const openCalendarButton = document.getElementById("openCalendarButton");
 const openSettingsButton = document.getElementById("openSettingsButton");
 const todayTimer = document.getElementById("todayTimer");
 const dayTimeLeft = document.getElementById("dayTimeLeft");
@@ -185,6 +191,20 @@ async function getStoredTrendsWindowBounds() {
   };
 }
 
+async function getStoredCalendarWindowBounds() {
+  const result = await chrome.storage.local.get(CALENDAR_WINDOW_BOUNDS_KEY);
+  const bounds = result[CALENDAR_WINDOW_BOUNDS_KEY];
+
+  if (!bounds || typeof bounds.width !== "number" || typeof bounds.height !== "number") {
+    return DEFAULT_CALENDAR_WINDOW_BOUNDS;
+  }
+
+  return {
+    width: Math.round(bounds.width),
+    height: Math.round(bounds.height)
+  };
+}
+
 async function saveFloatingWindowBounds() {
   if (!isFloatingWindow) {
     return;
@@ -317,6 +337,18 @@ async function openTrendsWindow() {
   });
 }
 
+async function openCalendarWindow() {
+  const bounds = await getStoredCalendarWindowBounds();
+
+  await chrome.windows.create({
+    url: chrome.runtime.getURL("calendar.html"),
+    type: "popup",
+    width: bounds.width,
+    height: bounds.height,
+    focused: true
+  });
+}
+
 async function initializePopup() {
   if (isFloatingWindow) {
     popOutButton.hidden = true;
@@ -336,6 +368,7 @@ async function initializePopup() {
   clockButton.addEventListener("click", toggleClock);
   popOutButton.addEventListener("click", openFloatingWindow);
   openTrendsButton.addEventListener("click", openTrendsWindow);
+  openCalendarButton.addEventListener("click", openCalendarWindow);
   openSettingsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local" && areaName !== "sync") {

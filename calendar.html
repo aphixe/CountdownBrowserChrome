@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calendar View</title>
+  <link rel="icon" href="icons/icon-128.png">
+  <link rel="stylesheet" href="calendar.css">
+</head>
+<body>
+  <main class="calendar-shell">
+    <section class="calendar-card">
+      <header class="calendar-toolbar">
+        <div class="toolbar-group toolbar-left">
+          <label class="toolbar-control toolbar-profile">
+            <span>Profile</span>
+            <select id="profileSelect" aria-label="Calendar profile"></select>
+          </label>
+          <button id="previousButton" class="toolbar-button" type="button">Prev</button>
+          <div id="weekLabel" class="week-label">Apr 6 - Apr 12, 2026</div>
+          <button id="nextButton" class="toolbar-button" type="button">Next</button>
+          <button id="thisWeekButton" class="toolbar-button" type="button">This Week</button>
+          <button id="nowButton" class="toolbar-button" type="button">Now</button>
+        </div>
+        <div class="toolbar-group toolbar-right">
+          <label class="toolbar-control toolbar-scale">
+            <span>Scale</span>
+            <input id="scaleSlider" type="range" min="0" max="4" value="2" step="1" aria-label="Calendar scale">
+            <strong id="scaleLabel">15 min</strong>
+          </label>
+        </div>
+      </header>
+
+      <section id="calendarHeader" class="calendar-header" aria-label="Week header"></section>
+
+      <section class="calendar-body">
+        <div id="timeGutter" class="time-gutter" aria-label="Time of day">
+          <div id="timeGutterTrack" class="time-gutter-track"></div>
+        </div>
+        <div id="calendarScroll" class="calendar-scroll">
+          <div id="calendarSurface" class="calendar-surface">
+            <div id="calendarGrid" class="calendar-grid" aria-label="Calendar grid"></div>
+            <div id="calendarBlocks" class="calendar-blocks" aria-hidden="true"></div>
+            <div id="nowLine" class="now-line" hidden>
+              <span id="nowBubble" class="now-bubble"></span>
+            </div>
+            <div id="calendarTooltip" class="calendar-tooltip" hidden></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="calendar-footer">
+        <button id="closeButton" class="toolbar-button close-button" type="button">Close</button>
+      </footer>
+    </section>
+  </main>
+
+  <script src="shared.js"></script>
+  <script src="calendar.js"></script>
+</body>
+</html>
