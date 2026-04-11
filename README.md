@@ -12,6 +12,7 @@ This project is a reimagined version of the original Countdown Pro Python app, b
 - Detects when audio is playing and **automatically starts/stops tracking**
 - Works across **any media** (YouTube, Netflix, podcasts, etc.)
 - No manual input required
+- * UPDATED!! now can toggle this off
 
 ### 🧠 Migaku / Anki Integration
 - When using the **Migaku Memory site**, time is automatically recorded to your profile

@@ -147,6 +147,16 @@ async function reconcileAudioClock() {
   const profile = getProfile(settings, settings.activeProfileId);
   const activeSession = getActiveSession(settings, profile.id);
   const autoManagedSessions = getAutoManagedSessions(settings);
+
+  if (!settings.autoClockOnAudio) {
+    for (const session of autoManagedSessions) {
+      await stopClock(session.profileId, { onlyIfAuto: true });
+    }
+
+    await updateActionIcon(await loadSettings());
+    return;
+  }
+
   const audible = await hasAudibleTabs();
 
   if (audible) {
@@ -226,7 +236,7 @@ chrome.tabs.onActivated.addListener(() => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === "local" && (changes.activeProfileId || changes.sessions)) {
+  if (areaName === "local" && (changes.activeProfileId || changes.sessions || changes.autoClockOnAudio)) {
     scheduleReconcile();
   }
 });

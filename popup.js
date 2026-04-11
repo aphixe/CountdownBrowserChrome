@@ -47,6 +47,7 @@ const currentStreak = document.getElementById("currentStreak");
 const goalLabel = document.getElementById("goalLabel");
 const heatmap = document.getElementById("heatmap");
 const clockButton = document.getElementById("clockButton");
+const autoClockOnAudioInput = document.getElementById("autoClockOnAudio");
 const pageFavicon = document.getElementById("pageFavicon");
 const popupShell = document.querySelector(".popup-shell");
 
@@ -274,6 +275,7 @@ async function render() {
   goalLabel.textContent = `Super goal: ${formatGoalMinutes(profile.superGoalMinutes)}`;
   clockButton.textContent = activeSession ? "Clock Off" : "Clock On";
   clockButton.dataset.running = activeSession ? "true" : "false";
+  autoClockOnAudioInput.checked = settings.autoClockOnAudio;
   updateFloatingWindowIcon(Boolean(activeSession));
 }
 
@@ -308,6 +310,13 @@ async function toggleClock() {
     await startClock(profile.id);
   }
 
+  await renderAndResize();
+}
+
+async function handleAutoClockOnAudioChange(event) {
+  const settings = await loadSettings();
+  settings.autoClockOnAudio = Boolean(event.target.checked);
+  await saveSettings(settings);
   await renderAndResize();
 }
 
@@ -366,6 +375,7 @@ async function initializePopup() {
 
   profileSelect.addEventListener("change", handleProfileChange);
   clockButton.addEventListener("click", toggleClock);
+  autoClockOnAudioInput.addEventListener("change", handleAutoClockOnAudioChange);
   popOutButton.addEventListener("click", openFloatingWindow);
   openTrendsButton.addEventListener("click", openTrendsWindow);
   openCalendarButton.addEventListener("click", openCalendarWindow);

@@ -10,6 +10,7 @@
     activeProfileId: DEFAULT_PROFILES[0].id,
     dayStart: "07:00",
     dayEnd: "23:00",
+    autoClockOnAudio: true,
     syncFolderName: "",
     syncEnabled: false,
     lastFolderSyncAt: "",
@@ -121,6 +122,9 @@
 
     settings.dayStart = typeof settings.dayStart === "string" ? settings.dayStart : defaults.dayStart;
     settings.dayEnd = typeof settings.dayEnd === "string" ? settings.dayEnd : defaults.dayEnd;
+    settings.autoClockOnAudio = typeof settings.autoClockOnAudio === "boolean"
+      ? settings.autoClockOnAudio
+      : defaults.autoClockOnAudio;
     settings.syncFolderName = typeof settings.syncFolderName === "string" ? settings.syncFolderName : "";
     settings.syncEnabled = Boolean(settings.syncEnabled);
     settings.lastFolderSyncAt = typeof settings.lastFolderSyncAt === "string" ? settings.lastFolderSyncAt : "";
