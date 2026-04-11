@@ -4,6 +4,7 @@ const {
   SYNC_ALARM_NAME,
   SYNC_INTERVAL_MINUTES,
   getActiveSession,
+  getTodayStats,
   getProfile,
   loadSettings,
   saveSettings,
@@ -14,6 +15,8 @@ const {
 
 let reconcileTimer = null;
 let iconState = null;
+const BADGE_ALARM_NAME = "badge-tick";
+const BADGE_INTERVAL_MINUTES = 1;
 const MIGAKU_STUDY_PROFILE_ID = "anki-migaku";
 const MIGAKU_STUDY_ORIGIN = "https://study.migaku.com";
 
@@ -62,6 +65,56 @@ async function updateActionIcon(settings) {
       128: "icons/icon-128.png"
     }
   });
+}
+
+function formatBadgeText(totalSeconds) {
+  const totalMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
+  if (totalMinutes <= 0) {
+    return "";
+  }
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m`;
+  }
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (minutes === 0 || hours >= 10) {
+    return `${hours}h`;
+  }
+  return `${hours}h${String(minutes).padStart(2, "0")}`;
+}
+
+function formatBadgeTitle(totalSeconds) {
+  const totalMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
+  if (totalMinutes <= 0) {
+    return "CountDown Pro";
+  }
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) {
+    return `${minutes}m tracked`;
+  }
+  if (minutes === 0) {
+    return `${hours}h tracked`;
+  }
+  return `${hours}h ${minutes}m tracked`;
+}
+
+async function updateActionBadge(settings) {
+  const profile = getProfile(settings, settings.activeProfileId);
+  const activeSession = getActiveSession(settings, profile.id);
+
+  if (!activeSession) {
+    await chrome.action.setBadgeText({ text: "" });
+    await chrome.action.setTitle({ title: "CountDown Pro" });
+    return;
+  }
+
+  const today = getTodayStats(settings, profile.id, new Date());
+  const badgeText = formatBadgeText(today.totalSeconds);
+
+  await chrome.action.setBadgeBackgroundColor({ color: "#1f2937" });
+  await chrome.action.setBadgeText({ text: badgeText });
+  await chrome.action.setTitle({ title: formatBadgeTitle(today.totalSeconds) });
 }
 
 function getAutoManagedSessions(settings) {
@@ -153,7 +206,9 @@ async function reconcileAudioClock() {
       await stopClock(session.profileId, { onlyIfAuto: true });
     }
 
-    await updateActionIcon(await loadSettings());
+    const nextSettings = await loadSettings();
+    await updateActionIcon(nextSettings);
+    await updateActionBadge(nextSettings);
     return;
   }
 
@@ -172,7 +227,9 @@ async function reconcileAudioClock() {
         autoManaged: true
       });
     }
-    await updateActionIcon(await loadSettings());
+    const nextSettings = await loadSettings();
+    await updateActionIcon(nextSettings);
+    await updateActionBadge(nextSettings);
     return;
   }
 
@@ -180,12 +237,20 @@ async function reconcileAudioClock() {
     await stopClock(session.profileId, { onlyIfAuto: true });
   }
 
-  await updateActionIcon(await loadSettings());
+  const nextSettings = await loadSettings();
+  await updateActionIcon(nextSettings);
+  await updateActionBadge(nextSettings);
 }
 
 async function ensureSyncAlarm() {
   await chrome.alarms.create(SYNC_ALARM_NAME, {
     periodInMinutes: SYNC_INTERVAL_MINUTES
+  });
+}
+
+async function ensureBadgeAlarm() {
+  await chrome.alarms.create(BADGE_ALARM_NAME, {
+    periodInMinutes: BADGE_INTERVAL_MINUTES
   });
 }
 
@@ -218,6 +283,10 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === SYNC_ALARM_NAME) {
     void runFolderSync();
+    return;
+  }
+  if (alarm.name === BADGE_ALARM_NAME) {
+    void loadSettings().then(updateActionBadge);
   }
 });
 
@@ -238,10 +307,15 @@ chrome.tabs.onActivated.addListener(() => {
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === "local" && (changes.activeProfileId || changes.sessions || changes.autoClockOnAudio)) {
     scheduleReconcile();
+    void loadSettings().then(updateActionBadge);
   }
 });
 
-void loadSettings().then(updateActionIcon);
+void loadSettings().then((settings) => {
+  void updateActionIcon(settings);
+  void updateActionBadge(settings);
+});
 void ensureSyncAlarm();
+void ensureBadgeAlarm();
 void runFolderSync();
 scheduleReconcile();

@@ -8,6 +8,9 @@ This project is a reimagined version of the original Countdown Pro Python app, b
 
 ## 🚀 Features
 
+### New timer badge
+- Shows the time in extension badge icon when clock is running.
+
 ### 🎧 Automatic Time Tracking
 - Detects when audio is playing and **automatically starts/stops tracking**
 - Works across **any media** (YouTube, Netflix, podcasts, etc.)
