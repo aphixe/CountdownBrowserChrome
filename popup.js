@@ -36,6 +36,8 @@ const profileSelect = document.getElementById("profileSelect");
 const popOutButton = document.getElementById("popOutButton");
 const openTrendsButton = document.getElementById("openTrendsButton");
 const openCalendarButton = document.getElementById("openCalendarButton");
+const openAddTimeButton = document.getElementById("openAddTimeButton");
+const undoAddTimeButton = document.getElementById("undoAddTimeButton");
 const openSettingsButton = document.getElementById("openSettingsButton");
 const todayTimer = document.getElementById("todayTimer");
 const dayTimeLeft = document.getElementById("dayTimeLeft");
@@ -50,10 +52,36 @@ const clockButton = document.getElementById("clockButton");
 const autoClockOnAudioInput = document.getElementById("autoClockOnAudio");
 const pageFavicon = document.getElementById("pageFavicon");
 const popupShell = document.querySelector(".popup-shell");
+const manualAddBackdrop = document.getElementById("manualAddBackdrop");
+const manualAddForm = document.getElementById("manualAddForm");
+const manualAddProfileSelect = document.getElementById("manualAddProfileSelect");
+const manualAddHoursInput = document.getElementById("manualAddHoursInput");
+const manualAddMinutesInput = document.getElementById("manualAddMinutesInput");
+const manualAddStartTimeInput = document.getElementById("manualAddStartTimeInput");
+const manualAddStatus = document.getElementById("manualAddStatus");
+const manualAddCancelButton = document.getElementById("manualAddCancelButton");
 
 let liveIntervalId = null;
 const isFloatingWindow = new URLSearchParams(window.location.search).get("mode") === "window";
 let saveBoundsTimeoutId = null;
+let lastManualAddSessionId = "";
+
+function cloneSession(session) {
+  return session
+    ? {
+        id: session.id,
+        profileId: session.profileId,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        source: session.source,
+        autoManaged: session.autoManaged
+      }
+    : null;
+}
+
+function updateUndoAddButton() {
+  undoAddTimeButton.disabled = !lastManualAddSessionId;
+}
 
 function renderProfiles(settings) {
   const extraOptions = [
@@ -78,6 +106,19 @@ function renderProfiles(settings) {
     option.value = item.value;
     option.textContent = item.label;
     profileSelect.append(option);
+  }
+}
+
+function fillManualAddProfiles(settings) {
+  const preferredProfileId = settings.activeProfileId || (settings.profiles[0] && settings.profiles[0].id) || "";
+  manualAddProfileSelect.innerHTML = "";
+
+  for (const profile of settings.profiles) {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = profile.name;
+    option.selected = profile.id === preferredProfileId;
+    manualAddProfileSelect.append(option);
   }
 }
 
@@ -277,6 +318,11 @@ async function render() {
   clockButton.dataset.running = activeSession ? "true" : "false";
   autoClockOnAudioInput.checked = settings.autoClockOnAudio;
   updateFloatingWindowIcon(Boolean(activeSession));
+  if (lastManualAddSessionId && !settings.sessions.some((session) => session.id === lastManualAddSessionId)) {
+    lastManualAddSessionId = "";
+  }
+  fillManualAddProfiles(settings);
+  updateUndoAddButton();
 }
 
 async function renderAndResize() {
@@ -358,6 +404,88 @@ async function openCalendarWindow() {
   });
 }
 
+function openManualAddDialog() {
+  const now = new Date();
+  manualAddStatus.textContent = "";
+  manualAddHoursInput.value = "0";
+  manualAddMinutesInput.value = "30";
+  manualAddStartTimeInput.value = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  manualAddBackdrop.hidden = false;
+  manualAddProfileSelect.focus();
+}
+
+function closeManualAddDialog() {
+  manualAddBackdrop.hidden = true;
+  manualAddStatus.textContent = "";
+}
+
+async function saveManualTime(event) {
+  event.preventDefault();
+  manualAddStatus.textContent = "";
+
+  const settings = await loadSettings();
+  const profileId = manualAddProfileSelect.value;
+  const [startHours, startMinutes] = String(manualAddStartTimeInput.value || "").split(":").map(Number);
+  const hours = Math.max(0, Number(manualAddHoursInput.value) || 0);
+  const minutes = Math.max(0, Math.min(59, Number(manualAddMinutesInput.value) || 0));
+  const durationMinutes = (hours * 60) + minutes;
+
+  manualAddHoursInput.value = String(hours);
+  manualAddMinutesInput.value = String(minutes);
+
+  if (!profileId) {
+    manualAddStatus.textContent = "Choose a profile.";
+    return;
+  }
+
+  if (!manualAddStartTimeInput.value || !Number.isFinite(startHours) || !Number.isFinite(startMinutes)) {
+    manualAddStatus.textContent = "Choose a start time.";
+    return;
+  }
+
+  if (durationMinutes <= 0) {
+    manualAddStatus.textContent = "Enter a duration longer than 0 minutes.";
+    return;
+  }
+
+  const startedAt = new Date();
+  startedAt.setHours(startHours, startMinutes, 0, 0);
+  const endedAt = new Date(startedAt.getTime() + (durationMinutes * 60000));
+  const session = {
+    id: crypto.randomUUID(),
+    profileId,
+    startedAt: startedAt.toISOString(),
+    endedAt: endedAt.toISOString(),
+    source: "manual-add"
+  };
+
+  settings.sessions = (settings.sessions || []).concat(session);
+  await saveSettings(settings);
+  lastManualAddSessionId = session.id;
+  closeManualAddDialog();
+  await renderAndResize();
+}
+
+async function undoLastManualAdd() {
+  if (!lastManualAddSessionId) {
+    updateUndoAddButton();
+    return;
+  }
+
+  const settings = await loadSettings();
+  const existingSession = settings.sessions.find((session) => session.id === lastManualAddSessionId);
+  if (!existingSession) {
+    lastManualAddSessionId = "";
+    updateUndoAddButton();
+    return;
+  }
+
+  settings.sessions = settings.sessions.filter((session) => session.id !== lastManualAddSessionId);
+  await saveSettings(settings);
+  lastManualAddSessionId = "";
+  await renderAndResize();
+}
+
 async function initializePopup() {
   if (isFloatingWindow) {
     popOutButton.hidden = true;
@@ -379,7 +507,23 @@ async function initializePopup() {
   popOutButton.addEventListener("click", openFloatingWindow);
   openTrendsButton.addEventListener("click", openTrendsWindow);
   openCalendarButton.addEventListener("click", openCalendarWindow);
+  openAddTimeButton.addEventListener("click", openManualAddDialog);
+  undoAddTimeButton.addEventListener("click", () => {
+    void undoLastManualAdd();
+  });
   openSettingsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
+  manualAddForm.addEventListener("submit", saveManualTime);
+  manualAddCancelButton.addEventListener("click", closeManualAddDialog);
+  manualAddBackdrop.addEventListener("click", (event) => {
+    if (event.target === manualAddBackdrop) {
+      closeManualAddDialog();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !manualAddBackdrop.hidden) {
+      closeManualAddDialog();
+    }
+  });
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local" && areaName !== "sync") {
       return;

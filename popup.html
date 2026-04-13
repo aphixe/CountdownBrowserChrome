@@ -43,6 +43,24 @@
           >
             <span aria-hidden="true">📅</span>
           </button>
+          <button
+            id="openAddTimeButton"
+            class="icon-button"
+            type="button"
+            title="Add time manually"
+            aria-label="Add time manually"
+          >
+            +
+          </button>
+          <button
+            id="undoAddTimeButton"
+            class="icon-button"
+            type="button"
+            title="Undo last manual add"
+            aria-label="Undo last manual add"
+          >
+            ↺
+          </button>
           <button id="openSettingsButton" class="icon-button" type="button" title="Settings" aria-label="Settings">
             &#9881;
           </button>
@@ -95,6 +113,40 @@
       </div>
     </section>
   </main>
+
+  <div id="manualAddBackdrop" class="dialog-backdrop" hidden>
+    <section class="manual-add-dialog" role="dialog" aria-modal="true" aria-labelledby="manualAddTitle">
+      <header class="manual-add-header">
+        <h2 id="manualAddTitle">Add Time</h2>
+        <p class="manual-add-subtitle">Add a manual session starting today at the selected time.</p>
+      </header>
+      <form id="manualAddForm" class="manual-add-form">
+        <label class="manual-add-field">
+          <span>Profile</span>
+          <select id="manualAddProfileSelect" required></select>
+        </label>
+        <div class="manual-add-duration">
+          <label class="manual-add-field">
+            <span>Hours</span>
+            <input id="manualAddHoursInput" type="number" min="0" step="1" inputmode="numeric" value="0">
+          </label>
+          <label class="manual-add-field">
+            <span>Minutes</span>
+            <input id="manualAddMinutesInput" type="number" min="0" max="59" step="1" inputmode="numeric" value="30">
+          </label>
+        </div>
+        <label class="manual-add-field">
+          <span>Start time</span>
+          <input id="manualAddStartTimeInput" type="time" required step="60">
+        </label>
+        <div id="manualAddStatus" class="manual-add-status" aria-live="polite"></div>
+        <div class="manual-add-actions">
+          <button id="manualAddCancelButton" class="secondary-dialog-button" type="button">Cancel</button>
+          <button id="manualAddSaveButton" class="primary-dialog-button" type="submit">Add Time</button>
+        </div>
+      </form>
+    </section>
+  </div>
 
   <script src="shared.js"></script>
   <script src="popup.js"></script>

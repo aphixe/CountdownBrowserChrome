@@ -23,6 +23,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   overflow: hidden;
@@ -141,6 +145,11 @@ body.floating-window .popup-shell {
 
 .icon-button:hover {
   background: rgba(255, 255, 255, 0.16);
+}
+
+.icon-button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .icon-button[hidden] {
@@ -374,4 +383,105 @@ body.floating-window .popup-shell {
 
 .toggle-input:checked + .toggle-slider::after {
   transform: translateX(18px);
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(7, 10, 15, 0.62);
+}
+
+.manual-add-dialog {
+  width: min(100%, 340px);
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1a2028;
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.4);
+}
+
+.manual-add-header {
+  margin-bottom: 14px;
+}
+
+.manual-add-header h2,
+.manual-add-header p {
+  margin: 0;
+}
+
+.manual-add-subtitle,
+.manual-add-status {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.manual-add-subtitle {
+  margin-top: 6px;
+}
+
+.manual-add-form {
+  display: grid;
+  gap: 12px;
+}
+
+.manual-add-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.manual-add-duration {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.manual-add-field input,
+.manual-add-field select {
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #11161d;
+  color: var(--text);
+  padding: 0 10px;
+  font: inherit;
+}
+
+.manual-add-field input:focus-visible,
+.manual-add-field select:focus-visible {
+  outline: 2px solid rgba(239, 176, 227, 0.65);
+  outline-offset: 2px;
+}
+
+.manual-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.secondary-dialog-button,
+.primary-dialog-button {
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0 14px;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.secondary-dialog-button {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.primary-dialog-button {
+  border: none;
+  color: #113042;
+  background: linear-gradient(180deg, #86e0ff, #59c9ff);
 }
