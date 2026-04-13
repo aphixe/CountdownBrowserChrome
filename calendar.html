@@ -45,6 +45,10 @@
               <span id="nowBubble" class="now-bubble"></span>
             </div>
             <div id="calendarTooltip" class="calendar-tooltip" hidden></div>
+            <div id="calendarContextMenu" class="calendar-context-menu" hidden>
+              <button id="editBlockButton" class="calendar-context-action" type="button">Edit</button>
+              <button id="undoEditButton" class="calendar-context-action" type="button">Undo Last Edit</button>
+            </div>
           </div>
         </div>
       </section>
@@ -54,6 +58,33 @@
       </footer>
     </section>
   </main>
+
+  <div id="editDialogBackdrop" class="dialog-backdrop" hidden>
+    <section class="edit-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle">
+      <header class="edit-dialog-header">
+        <div>
+          <h2 id="editDialogTitle">Edit Block Time</h2>
+          <p id="editDialogSubtitle" class="edit-dialog-subtitle"></p>
+        </div>
+      </header>
+      <form id="editBlockForm" class="edit-dialog-form">
+        <label class="edit-field">
+          <span>Start time</span>
+          <input id="editStartTimeInput" type="time" required step="60">
+        </label>
+        <label class="edit-field">
+          <span>End time</span>
+          <input id="editEndTimeInput" type="time" required step="60">
+        </label>
+        <p class="edit-dialog-hint">Use hours and minutes. If the end time is earlier than the start time, it will be saved as the next day.</p>
+        <div id="editDialogStatus" class="edit-dialog-status" aria-live="polite"></div>
+        <div class="edit-dialog-actions">
+          <button id="cancelEditButton" class="toolbar-button" type="button">Cancel</button>
+          <button id="saveEditButton" class="toolbar-button" type="submit">Save</button>
+        </div>
+      </form>
+    </section>
+  </div>
 
   <script src="shared.js"></script>
   <script src="calendar.js"></script>

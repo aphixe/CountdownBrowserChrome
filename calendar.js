@@ -2,7 +2,8 @@ const {
   formatDuration,
   getGraphColorsForProfile,
   getPaletteProfileColor,
-  loadSettings
+  loadSettings,
+  saveSettings
 } = window.CountDownPro;
 
 const CALENDAR_WINDOW_BOUNDS_KEY = "calendarWindowBounds";
@@ -28,6 +29,16 @@ const calendarBlocks = document.getElementById("calendarBlocks");
 const nowLine = document.getElementById("nowLine");
 const nowBubble = document.getElementById("nowBubble");
 const calendarTooltip = document.getElementById("calendarTooltip");
+const calendarContextMenu = document.getElementById("calendarContextMenu");
+const editBlockButton = document.getElementById("editBlockButton");
+const undoEditButton = document.getElementById("undoEditButton");
+const editDialogBackdrop = document.getElementById("editDialogBackdrop");
+const editDialogSubtitle = document.getElementById("editDialogSubtitle");
+const editBlockForm = document.getElementById("editBlockForm");
+const editStartTimeInput = document.getElementById("editStartTimeInput");
+const editEndTimeInput = document.getElementById("editEndTimeInput");
+const editDialogStatus = document.getElementById("editDialogStatus");
+const cancelEditButton = document.getElementById("cancelEditButton");
 const closeButton = document.getElementById("closeButton");
 
 const state = {
@@ -36,7 +47,10 @@ const state = {
   selectedProfileId: CALENDAR_PROFILE_ALL,
   scaleIndex: 2,
   pixelsPerMinute: 2.2,
-  nowTimerId: null
+  nowTimerId: null,
+  contextSessionId: "",
+  editingSessionId: "",
+  lastEditSnapshot: null
 };
 
 let resizeBoundsTimeoutId = null;
@@ -128,6 +142,10 @@ function formatMinutesLabel(totalMinutes) {
   return formatNowLabel(date);
 }
 
+function formatTimeInputValue(date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
 function formatShortDuration(seconds) {
   const totalMinutes = Math.max(0, Math.round((Number(seconds) || 0) / 60));
   const hours = Math.floor(totalMinutes / 60);
@@ -185,6 +203,10 @@ function parseSession(session) {
     return null;
   }
   return { startedAt, endedAt };
+}
+
+function getSessionById(settings, sessionId) {
+  return (settings.sessions || []).find((session) => session.id === sessionId) || null;
 }
 
 function splitSessionByDay(session) {
@@ -259,6 +281,7 @@ function buildCalendarData(settings) {
 
       weekTotals[dayIndex] += segment.durationSeconds;
       blocks.push({
+        sessionId: session.id,
         dayIndex,
         startMinutes: segment.startMinutes,
         endMinutes: Math.max(segment.endMinutes, segment.startMinutes + 2),
@@ -397,6 +420,7 @@ function renderBlocks(blocks) {
     blockElement.style.width = `${width}px`;
     blockElement.style.height = `${height}px`;
     blockElement.style.background = `linear-gradient(180deg, ${block.color}, ${block.color}dd)`;
+    blockElement.dataset.sessionId = block.sessionId || "";
     blockElement.dataset.profileName = block.profileName;
     blockElement.dataset.duration = formatBlockDuration(block.durationSeconds);
 
@@ -411,6 +435,146 @@ function renderBlocks(blocks) {
 
 function hideTooltip() {
   calendarTooltip.hidden = true;
+}
+
+function hideContextMenu() {
+  calendarContextMenu.hidden = true;
+  state.contextSessionId = "";
+}
+
+function showContextMenu(sessionId, event) {
+  const surfaceRect = calendarSurface.getBoundingClientRect();
+  undoEditButton.disabled = !state.lastEditSnapshot;
+  calendarContextMenu.hidden = false;
+  calendarContextMenu.style.left = "0px";
+  calendarContextMenu.style.top = "0px";
+  state.contextSessionId = sessionId;
+
+  const menuWidth = calendarContextMenu.offsetWidth || 120;
+  const menuHeight = calendarContextMenu.offsetHeight || 46;
+  const left = Math.min(
+    event.clientX - surfaceRect.left + 4,
+    surfaceRect.width - menuWidth - 8
+  );
+  const top = Math.min(
+    event.clientY - surfaceRect.top + 4,
+    surfaceRect.height - menuHeight - 8
+  );
+
+  calendarContextMenu.style.left = `${Math.max(8, left)}px`;
+  calendarContextMenu.style.top = `${Math.max(8, top)}px`;
+  editBlockButton.focus();
+}
+
+function openEditDialog(sessionId) {
+  const session = getSessionById(state.settings, sessionId);
+  if (!session) {
+    hideContextMenu();
+    return;
+  }
+
+  const parsed = parseSession(session);
+  if (!parsed) {
+    hideContextMenu();
+    return;
+  }
+
+  state.editingSessionId = sessionId;
+  editDialogSubtitle.textContent = `${session.profileId ? "Session" : "Block"} time`;
+  editStartTimeInput.value = formatTimeInputValue(parsed.startedAt);
+  editEndTimeInput.value = formatTimeInputValue(parsed.endedAt);
+  editDialogStatus.textContent = "";
+  editDialogBackdrop.hidden = false;
+  hideContextMenu();
+  editStartTimeInput.focus();
+}
+
+function closeEditDialog() {
+  editDialogBackdrop.hidden = true;
+  editDialogStatus.textContent = "";
+  state.editingSessionId = "";
+}
+
+function applyEditedSessionTimes(session, startTimeValue, endTimeValue) {
+  const parsed = parseSession(session);
+  if (!parsed) {
+    throw new Error("This session could not be edited.");
+  }
+
+  const [startHours, startMinutes] = startTimeValue.split(":").map(Number);
+  const [endHours, endMinutes] = endTimeValue.split(":").map(Number);
+  const nextStart = new Date(parsed.startedAt);
+  nextStart.setHours(startHours || 0, startMinutes || 0, 0, 0);
+
+  const nextEnd = new Date(parsed.endedAt);
+  nextEnd.setHours(endHours || 0, endMinutes || 0, 0, 0);
+  if (nextEnd <= nextStart) {
+    nextEnd.setDate(nextEnd.getDate() + 1);
+  }
+
+  if (nextEnd <= nextStart) {
+    throw new Error("End time must be after start time.");
+  }
+
+  session.startedAt = nextStart.toISOString();
+  session.endedAt = nextEnd.toISOString();
+}
+
+async function saveEditedBlock(event) {
+  event.preventDefault();
+  editDialogStatus.textContent = "";
+
+  const session = getSessionById(state.settings, state.editingSessionId);
+  if (!session) {
+    editDialogStatus.textContent = "That block could not be found.";
+    return;
+  }
+
+  if (!editStartTimeInput.value || !editEndTimeInput.value) {
+    editDialogStatus.textContent = "Choose both start and end times.";
+    return;
+  }
+
+  try {
+    state.lastEditSnapshot = {
+      sessionId: session.id,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt
+    };
+    applyEditedSessionTimes(session, editStartTimeInput.value, editEndTimeInput.value);
+    state.settings = await saveSettings(state.settings);
+    closeEditDialog();
+    drawCalendar();
+  } catch (error) {
+    editDialogStatus.textContent = error.message || "Could not save that block.";
+  }
+}
+
+async function undoLastEdit() {
+  if (!state.lastEditSnapshot) {
+    hideContextMenu();
+    return;
+  }
+
+  const session = getSessionById(state.settings, state.lastEditSnapshot.sessionId);
+  if (!session) {
+    state.lastEditSnapshot = null;
+    hideContextMenu();
+    return;
+  }
+
+  const redoSnapshot = {
+    sessionId: session.id,
+    startedAt: session.startedAt,
+    endedAt: session.endedAt
+  };
+
+  session.startedAt = state.lastEditSnapshot.startedAt;
+  session.endedAt = state.lastEditSnapshot.endedAt;
+  state.settings = await saveSettings(state.settings);
+  state.lastEditSnapshot = redoSnapshot;
+  hideContextMenu();
+  drawCalendar();
 }
 
 function showTooltip(target, event) {
@@ -496,6 +660,7 @@ function drawCalendar() {
   renderBlocks(blocks);
   updateNowLine();
   updateNavButtons();
+  hideContextMenu();
 }
 
 function updateNavButtons() {
@@ -585,6 +750,7 @@ async function initialize() {
   calendarScroll.addEventListener("scroll", () => {
     timeGutterTrack.style.transform = `translateY(${-calendarScroll.scrollTop}px)`;
     hideTooltip();
+    hideContextMenu();
   });
 
   calendarBlocks.addEventListener("mouseover", (event) => {
@@ -614,6 +780,61 @@ async function initialize() {
       return;
     }
     hideTooltip();
+  });
+
+  calendarBlocks.addEventListener("contextmenu", (event) => {
+    const target = event.target instanceof Element
+      ? event.target.closest(".calendar-block")
+      : null;
+    if (!target) {
+      hideContextMenu();
+      return;
+    }
+
+    event.preventDefault();
+    const sessionId = target.dataset.sessionId || "";
+    if (!sessionId) {
+      hideContextMenu();
+      return;
+    }
+
+    showTooltip(target, event);
+    showContextMenu(sessionId, event);
+  });
+
+  editBlockButton.addEventListener("click", () => {
+    if (!state.contextSessionId) {
+      hideContextMenu();
+      return;
+    }
+    openEditDialog(state.contextSessionId);
+  });
+  undoEditButton.addEventListener("click", () => {
+    void undoLastEdit();
+  });
+
+  editBlockForm.addEventListener("submit", saveEditedBlock);
+  cancelEditButton.addEventListener("click", closeEditDialog);
+  editDialogBackdrop.addEventListener("click", (event) => {
+    if (event.target === editDialogBackdrop) {
+      closeEditDialog();
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target?.closest("#calendarContextMenu") && !target?.closest(".calendar-block")) {
+      hideContextMenu();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      hideContextMenu();
+      if (!editDialogBackdrop.hidden) {
+        closeEditDialog();
+      }
+    }
   });
 
   window.addEventListener("resize", () => {

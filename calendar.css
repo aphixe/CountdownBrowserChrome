@@ -22,6 +22,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -352,6 +356,120 @@ body {
   white-space: pre-line;
   font-size: 12px;
   line-height: 1.4;
+}
+
+.calendar-context-menu {
+  position: absolute;
+  z-index: 6;
+  min-width: 120px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 23, 31, 0.98);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.36);
+}
+
+.calendar-context-action {
+  width: 100%;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-context-action:hover,
+.calendar-context-action:focus-visible {
+  background: rgba(88, 207, 255, 0.16);
+  outline: none;
+}
+
+.calendar-context-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.calendar-context-action:disabled:hover,
+.calendar-context-action:disabled:focus-visible {
+  background: transparent;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(7, 10, 15, 0.62);
+}
+
+.edit-dialog {
+  width: min(100%, 360px);
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1a2028;
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.4);
+}
+
+.edit-dialog-header {
+  margin-bottom: 14px;
+}
+
+.edit-dialog-header h2,
+.edit-dialog-header p {
+  margin: 0;
+}
+
+.edit-dialog-subtitle {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.edit-dialog-form {
+  display: grid;
+  gap: 12px;
+}
+
+.edit-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.edit-field input {
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #11161d;
+  color: var(--text);
+  padding: 0 10px;
+  font: inherit;
+}
+
+.edit-field input:focus-visible {
+  outline: 2px solid rgba(239, 176, 227, 0.65);
+  outline-offset: 2px;
+}
+
+.edit-dialog-hint,
+.edit-dialog-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.edit-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .calendar-footer {
