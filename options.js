@@ -1,5 +1,6 @@
 const {
   buildExportCsv,
+  getAnkiConnectStatus,
   getProfile,
   loadSettings,
   normalizeProfileColor,
@@ -25,8 +26,17 @@ const importStatus = document.getElementById("importStatus");
 const exportProfileSelect = document.getElementById("exportProfileSelect");
 const exportButton = document.getElementById("exportButton");
 const exportStatus = document.getElementById("exportStatus");
+const ankiConnectEnabledInput = document.getElementById("ankiConnectEnabledInput");
+const ankiConnectHostInput = document.getElementById("ankiConnectHostInput");
+const ankiConnectPortInput = document.getElementById("ankiConnectPortInput");
+const ankiConnectIndicator = document.getElementById("ankiConnectIndicator");
+const ankiConnectIndicatorText = document.getElementById("ankiConnectIndicatorText");
+const ankiConnectStatus = document.getElementById("ankiConnectStatus");
+const testAnkiConnectButton = document.getElementById("testAnkiConnectButton");
 
 let draftSettings = null;
+let ankiStatusRequestId = 0;
+let ankiSettingsSaveTimeoutId = null;
 
 function setStatus(message) {
   saveStatus.textContent = message;
@@ -38,6 +48,16 @@ function setImportStatus(message) {
 
 function setExportStatus(message) {
   exportStatus.textContent = message;
+}
+
+function setAnkiStatus(message) {
+  ankiConnectStatus.textContent = message;
+}
+
+function setAnkiIndicator(state, text) {
+  ankiConnectIndicator.classList.remove("is-connected", "is-disconnected", "is-disabled", "is-checking");
+  ankiConnectIndicator.classList.add(`is-${state}`);
+  ankiConnectIndicatorText.textContent = text;
 }
 
 function splitGoalMinutes(totalMinutes) {
@@ -185,6 +205,12 @@ function renderProfilesList() {
 function renderOptions() {
   dayStartInput.value = draftSettings.dayStart;
   dayEndInput.value = draftSettings.dayEnd;
+  ankiConnectEnabledInput.checked = Boolean(draftSettings.ankiConnectEnabled);
+  ankiConnectHostInput.value = draftSettings.ankiConnectHost || "127.0.0.1";
+  ankiConnectPortInput.value = String(draftSettings.ankiConnectPort || 8765);
+  ankiConnectHostInput.disabled = !draftSettings.ankiConnectEnabled;
+  ankiConnectPortInput.disabled = !draftSettings.ankiConnectEnabled;
+  testAnkiConnectButton.disabled = false;
   renderProfilesList();
   renderProfileGoalSelect();
   renderImportProfileSelect();
@@ -208,6 +234,13 @@ function addProfile() {
 function syncDraftFromInputs() {
   draftSettings.dayStart = dayStartInput.value || "07:00";
   draftSettings.dayEnd = dayEndInput.value || "23:00";
+  draftSettings.ankiConnectEnabled = Boolean(ankiConnectEnabledInput.checked);
+  draftSettings.ankiConnectHost = String(ankiConnectHostInput.value || "127.0.0.1").trim() || "127.0.0.1";
+  draftSettings.ankiConnectPort = Math.max(1, Math.min(65535, Number(ankiConnectPortInput.value) || 8765));
+  ankiConnectHostInput.value = draftSettings.ankiConnectHost;
+  ankiConnectPortInput.value = String(draftSettings.ankiConnectPort);
+  ankiConnectHostInput.disabled = !draftSettings.ankiConnectEnabled;
+  ankiConnectPortInput.disabled = !draftSettings.ankiConnectEnabled;
 
   const selectedProfile = draftSettings.profiles.find((profile) => profile.id === profileGoalSelect.value);
   if (selectedProfile) {
@@ -220,6 +253,54 @@ function syncDraftFromInputs() {
     id: profile.id || slugifyProfileName(profile.name || `profile-${index + 1}`),
     color: normalizeProfileColor(profile.color, profile.name || `Profile ${index + 1}`)
   }));
+}
+
+async function persistAnkiConnectSettings() {
+  syncDraftFromInputs();
+  draftSettings = normalizeSettings(draftSettings);
+  await saveSettings(draftSettings);
+}
+
+function scheduleAnkiConnectSettingsPersist() {
+  clearTimeout(ankiSettingsSaveTimeoutId);
+  ankiSettingsSaveTimeoutId = setTimeout(() => {
+    ankiSettingsSaveTimeoutId = null;
+    void persistAnkiConnectSettings();
+  }, 250);
+}
+
+async function refreshAnkiConnectStatus(options = {}) {
+  syncDraftFromInputs();
+  if (options.persist) {
+    await persistAnkiConnectSettings();
+  }
+  const requestId = ++ankiStatusRequestId;
+
+  if (!draftSettings.ankiConnectEnabled) {
+    setAnkiIndicator("disabled", "Disabled");
+    setAnkiStatus("Turn on AnkiConnect to test the local connection.");
+    return;
+  }
+
+  setAnkiIndicator("checking", "Checking");
+  setAnkiStatus("Trying to reach AnkiConnect...");
+  testAnkiConnectButton.disabled = true;
+
+  const status = await getAnkiConnectStatus(draftSettings);
+  if (requestId !== ankiStatusRequestId) {
+    return;
+  }
+
+  testAnkiConnectButton.disabled = false;
+  if (status.ok) {
+    setAnkiIndicator("connected", "Connected");
+    const versionSuffix = status.version ? ` AnkiConnect v${status.version}.` : "";
+    setAnkiStatus(`${status.message}${versionSuffix}`);
+    return;
+  }
+
+  setAnkiIndicator("disconnected", "Disconnected");
+  setAnkiStatus(status.message);
 }
 
 function downloadCsv(filename, csvText) {
@@ -307,6 +388,7 @@ async function saveOptions() {
   await saveSettings(draftSettings);
   setStatus("Settings saved.");
   renderOptions();
+  await refreshAnkiConnectStatus();
 }
 
 async function initializeOptions() {
@@ -323,10 +405,28 @@ async function initializeOptions() {
   superGoalMinutesInput.addEventListener("input", () => setStatus(""));
   dayStartInput.addEventListener("input", () => setStatus(""));
   dayEndInput.addEventListener("input", () => setStatus(""));
+  ankiConnectEnabledInput.addEventListener("change", () => {
+    setStatus("");
+    void refreshAnkiConnectStatus({ persist: true });
+  });
+  ankiConnectHostInput.addEventListener("input", () => {
+    setStatus("");
+    setAnkiStatus("");
+    scheduleAnkiConnectSettingsPersist();
+  });
+  ankiConnectPortInput.addEventListener("input", () => {
+    setStatus("");
+    setAnkiStatus("");
+    scheduleAnkiConnectSettingsPersist();
+  });
   csvFileInput.addEventListener("change", () => setImportStatus(""));
   importButton.addEventListener("click", importCsv);
   exportButton.addEventListener("click", exportCsv);
+  testAnkiConnectButton.addEventListener("click", () => {
+    void refreshAnkiConnectStatus({ persist: true });
+  });
   saveButton.addEventListener("click", saveOptions);
+  await refreshAnkiConnectStatus();
 }
 
 initializeOptions();

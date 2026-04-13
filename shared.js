@@ -10,6 +10,9 @@
     activeProfileId: DEFAULT_PROFILES[0].id,
     dayStart: "07:00",
     dayEnd: "23:00",
+    ankiConnectEnabled: false,
+    ankiConnectHost: "127.0.0.1",
+    ankiConnectPort: 8765,
     autoClockOnAudio: true,
     syncFolderName: "",
     syncEnabled: false,
@@ -119,6 +122,15 @@
 
     settings.dayStart = typeof settings.dayStart === "string" ? settings.dayStart : defaults.dayStart;
     settings.dayEnd = typeof settings.dayEnd === "string" ? settings.dayEnd : defaults.dayEnd;
+    settings.ankiConnectEnabled = typeof settings.ankiConnectEnabled === "boolean"
+      ? settings.ankiConnectEnabled
+      : defaults.ankiConnectEnabled;
+    settings.ankiConnectHost = typeof settings.ankiConnectHost === "string" && settings.ankiConnectHost.trim()
+      ? settings.ankiConnectHost.trim()
+      : defaults.ankiConnectHost;
+    settings.ankiConnectPort = Number.isFinite(Number(settings.ankiConnectPort))
+      ? Math.max(1, Math.min(65535, Math.round(Number(settings.ankiConnectPort))))
+      : defaults.ankiConnectPort;
     settings.autoClockOnAudio = typeof settings.autoClockOnAudio === "boolean"
       ? settings.autoClockOnAudio
       : defaults.autoClockOnAudio;
@@ -159,6 +171,76 @@
     const normalized = normalizeSettings(settings);
     await chrome.storage.local.set(normalized);
     return normalized;
+  }
+
+  function getAnkiConnectUrl(settings) {
+    const normalized = normalizeSettings(settings);
+    const host = normalized.ankiConnectHost || "127.0.0.1";
+    const port = normalized.ankiConnectPort || 8765;
+    return `http://${host}:${port}`;
+  }
+
+  async function invokeAnkiConnect(settings, action, params = {}, version = 5, timeoutMs = 3000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(getAnkiConnectUrl(settings), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ action, version, params }),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`AnkiConnect returned HTTP ${response.status}.`);
+      }
+
+      const payload = await response.json();
+      if (payload && payload.error) {
+        throw new Error(String(payload.error));
+      }
+
+      return payload ? payload.result : null;
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        throw new Error("AnkiConnect request timed out.");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  async function getAnkiConnectStatus(settings) {
+    const normalized = normalizeSettings(settings);
+    if (!normalized.ankiConnectEnabled) {
+      return {
+        ok: false,
+        state: "disabled",
+        message: "AnkiConnect is turned off."
+      };
+    }
+
+    try {
+      const version = await invokeAnkiConnect(normalized, "version");
+      return {
+        ok: true,
+        state: "connected",
+        version,
+        message: `Connected to Anki on ${normalized.ankiConnectHost}:${normalized.ankiConnectPort}.`
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        state: "disconnected",
+        message: error && error.message
+          ? `Could not reach Anki on ${normalized.ankiConnectHost}:${normalized.ankiConnectPort}: ${error.message}`
+          : "Could not reach AnkiConnect."
+      };
+    }
   }
 
   function formatDuration(totalSeconds) {
@@ -390,12 +472,22 @@
 
   async function stopClock(profileId, options = {}) {
     const settings = await loadSettings();
-    const activeSession = getActiveSession(settings, profileId);
+    const activeSession = options.sessionId
+      ? settings.sessions.find((session) => session.id === options.sessionId && !session.endedAt)
+      : getActiveSession(settings, profileId);
     if (!activeSession) {
       return settings;
     }
 
+    if (activeSession.profileId !== profileId) {
+      return settings;
+    }
+
     if (options.onlyIfAuto && !activeSession.autoManaged) {
+      return settings;
+    }
+
+    if (options.onlyIfSource && activeSession.source !== options.onlyIfSource) {
       return settings;
     }
 
@@ -788,6 +880,8 @@
     getWindowForDate,
     getYearTotalSeconds,
     loadSettings,
+    getAnkiConnectStatus,
+    getAnkiConnectUrl,
     mergeImportedSessions,
     normalizeSettings,
     parseCsvLine,
@@ -799,6 +893,7 @@
     startClock,
     stopClock,
     syncSettingsWithFolder,
+    invokeAnkiConnect,
     verifyReadWritePermission,
     writeCsvFileToDirectory
   };

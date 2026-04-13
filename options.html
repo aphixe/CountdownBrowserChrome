@@ -54,6 +54,37 @@
         </article>
       </section>
 
+      <section class="panel anki-panel">
+        <div class="panel-head">
+          <h2>AnkiConnect</h2>
+          <div id="ankiConnectIndicator" class="connection-indicator is-disabled" aria-live="polite">
+            <span class="status-light" aria-hidden="true"></span>
+            <span id="ankiConnectIndicatorText">Disabled</span>
+          </div>
+        </div>
+        <label class="toggle-row" for="ankiConnectEnabledInput">
+          <span>Enable AnkiConnect</span>
+          <input id="ankiConnectEnabledInput" type="checkbox">
+        </label>
+        <div class="section-grid anki-grid">
+          <label>
+            <span>Host</span>
+            <input id="ankiConnectHostInput" type="text" placeholder="127.0.0.1" autocomplete="off" spellcheck="false">
+          </label>
+          <label>
+            <span>Port</span>
+            <input id="ankiConnectPortInput" type="number" min="1" max="65535" step="1" inputmode="numeric">
+          </label>
+        </div>
+        <p class="hint">AnkiConnect normally listens on <code>127.0.0.1:8765</code>. Change the host or port here if your setup uses something different.</p>
+        <p class="hint">Install the AnkiConnect add-on in Anki with code <code>2055492159</code>, then keep the Anki desktop app open while testing.</p>
+        <div class="footer import-actions">
+          <div id="ankiConnectStatus" class="save-status" aria-live="polite"></div>
+          <button id="testAnkiConnectButton" class="secondary-button" type="button">Test Connection</button>
+        </div>
+        <p class="hint">When connected, the extension automatically clocks time into the <code>Anki/Migaku</code> profile while Anki is actively showing review cards, and stops when review mode ends.</p>
+      </section>
+
       <section class="panel profiles-panel">
         <div class="panel-head">
           <h2>Profiles</h2>

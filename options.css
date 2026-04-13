@@ -136,8 +136,67 @@ select,
   margin-top: 18px;
 }
 
+.anki-panel {
+  margin-top: 18px;
+}
+
+.anki-grid {
+  margin-top: 10px;
+}
+
 #syncFolderName[readonly] {
   opacity: 0.85;
+}
+
+.toggle-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toggle-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+}
+
+.connection-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.status-light {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #6b7280;
+  box-shadow: 0 0 12px rgba(107, 114, 128, 0.45);
+}
+
+.connection-indicator.is-connected .status-light {
+  background: #22c55e;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.75);
+}
+
+.connection-indicator.is-disconnected .status-light {
+  background: #ef4444;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.75);
+}
+
+.connection-indicator.is-disabled .status-light {
+  background: #ef4444;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.75);
+}
+
+.connection-indicator.is-checking .status-light {
+  background: #f59e0b;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.65);
 }
 
 .profiles-list {

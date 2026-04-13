@@ -4,6 +4,8 @@ const {
   SYNC_ALARM_NAME,
   SYNC_INTERVAL_MINUTES,
   getActiveSession,
+  getAnkiConnectStatus,
+  invokeAnkiConnect,
   getTodayStats,
   getProfile,
   loadSettings,
@@ -15,10 +17,18 @@ const {
 
 let reconcileTimer = null;
 let iconState = null;
+let ankiReviewTimer = null;
 const BADGE_ALARM_NAME = "badge-tick";
 const BADGE_INTERVAL_MINUTES = 1;
+const ANKI_REVIEW_ALARM_NAME = "anki-review-tick";
+const ANKI_REVIEW_INTERVAL_MINUTES = 0.5;
+const ANKI_REVIEW_POLL_MS = 4000;
 const MIGAKU_STUDY_PROFILE_ID = "anki-migaku";
 const MIGAKU_STUDY_ORIGIN = "https://study.migaku.com";
+const ANKI_REVIEW_SOURCE = "anki-connect-review";
+const AUDIO_SOURCE = "tab-audio";
+const ANKI_AUTO_PROFILE_OVERRIDE_ID = "anki-review";
+const MIGAKU_AUTO_PROFILE_OVERRIDE_ID = "migaku-review";
 
 function drawEmojiIcon(emoji, size) {
   const canvas = new OffscreenCanvas(size, size);
@@ -117,8 +127,16 @@ async function updateActionBadge(settings) {
   await chrome.action.setTitle({ title: formatBadgeTitle(today.totalSeconds) });
 }
 
-function getAutoManagedSessions(settings) {
-  return (settings.sessions || []).filter((session) => !session.endedAt && session.autoManaged);
+function getAutoManagedSessions(settings, source = "") {
+  return (settings.sessions || []).filter((session) => {
+    if (session.endedAt || !session.autoManaged) {
+      return false;
+    }
+    if (source && session.source !== source) {
+      return false;
+    }
+    return true;
+  });
 }
 
 function scheduleReconcile() {
@@ -127,6 +145,29 @@ function scheduleReconcile() {
     reconcileTimer = null;
     void reconcileState();
   }, 250);
+}
+
+function clearAnkiReviewLoop() {
+  if (ankiReviewTimer) {
+    clearTimeout(ankiReviewTimer);
+    ankiReviewTimer = null;
+  }
+}
+
+async function scheduleAnkiReviewLoop(delayMs = ANKI_REVIEW_POLL_MS) {
+  clearAnkiReviewLoop();
+  const settings = await loadSettings();
+  if (!settings.ankiConnectEnabled) {
+    return;
+  }
+
+  ankiReviewTimer = setTimeout(() => {
+    ankiReviewTimer = null;
+    void (async () => {
+      await reconcileState();
+      await scheduleAnkiReviewLoop(ANKI_REVIEW_POLL_MS);
+    })();
+  }, delayMs);
 }
 
 function isMigakuStudyUrl(urlString) {
@@ -154,30 +195,62 @@ async function hasMigakuStudyTabs() {
   return tabs.some((tab) => isMigakuStudyUrl(tab.url));
 }
 
+async function getAnkiReviewState(settings) {
+  const connectionStatus = await getAnkiConnectStatus(settings);
+  if (!connectionStatus.ok) {
+    return {
+      connected: false,
+      reviewing: false,
+      card: null
+    };
+  }
+
+  try {
+    const card = await invokeAnkiConnect(settings, "guiCurrentCard");
+    return {
+      connected: true,
+      reviewing: Boolean(card && card.cardId),
+      card: card || null
+    };
+  } catch {
+    return {
+      connected: false,
+      reviewing: false,
+      card: null
+    };
+  }
+}
+
 async function reconcileAutoProfile() {
   const settings = await loadSettings();
   const hasStudyTab = await hasMigakuStudyTabs();
+  const ankiReview = await getAnkiReviewState(settings);
+  const nextOverrideId = ankiReview.reviewing
+    ? ANKI_AUTO_PROFILE_OVERRIDE_ID
+    : (hasStudyTab ? MIGAKU_AUTO_PROFILE_OVERRIDE_ID : "");
 
-  if (hasStudyTab) {
+  if (nextOverrideId) {
     if (settings.activeProfileId !== MIGAKU_STUDY_PROFILE_ID) {
-      const nextSettings = {
-        ...settings,
-        autoProfilePreviousId: settings.autoProfilePreviousId || settings.activeProfileId,
-        autoProfileOverrideId: MIGAKU_STUDY_PROFILE_ID,
-        activeProfileId: MIGAKU_STUDY_PROFILE_ID
-      };
-      await saveSettings(nextSettings);
-    } else if (settings.autoProfileOverrideId !== MIGAKU_STUDY_PROFILE_ID) {
       await saveSettings({
         ...settings,
-        autoProfileOverrideId: MIGAKU_STUDY_PROFILE_ID,
+        autoProfilePreviousId: settings.autoProfilePreviousId || settings.activeProfileId,
+        autoProfileOverrideId: nextOverrideId,
+        activeProfileId: MIGAKU_STUDY_PROFILE_ID
+      });
+      return;
+    }
+
+    if (settings.autoProfileOverrideId !== nextOverrideId) {
+      await saveSettings({
+        ...settings,
+        autoProfileOverrideId: nextOverrideId,
         autoProfilePreviousId: settings.autoProfilePreviousId
       });
     }
     return;
   }
 
-  if (settings.autoProfileOverrideId === MIGAKU_STUDY_PROFILE_ID) {
+  if (settings.autoProfileOverrideId === ANKI_AUTO_PROFILE_OVERRIDE_ID || settings.autoProfileOverrideId === MIGAKU_AUTO_PROFILE_OVERRIDE_ID) {
     const fallbackId = settings.autoProfilePreviousId && settings.profiles.some((profile) => profile.id === settings.autoProfilePreviousId)
       ? settings.autoProfilePreviousId
       : settings.profiles[0].id;
@@ -193,17 +266,18 @@ async function reconcileAutoProfile() {
 async function reconcileState() {
   await reconcileAutoProfile();
   await reconcileAudioClock();
+  await reconcileAnkiReviewClock();
 }
 
 async function reconcileAudioClock() {
   const settings = await loadSettings();
   const profile = getProfile(settings, settings.activeProfileId);
   const activeSession = getActiveSession(settings, profile.id);
-  const autoManagedSessions = getAutoManagedSessions(settings);
+  const audioManagedSessions = getAutoManagedSessions(settings, AUDIO_SOURCE);
 
   if (!settings.autoClockOnAudio) {
-    for (const session of autoManagedSessions) {
-      await stopClock(session.profileId, { onlyIfAuto: true });
+    for (const session of audioManagedSessions) {
+      await stopClock(session.profileId, { sessionId: session.id, onlyIfAuto: true, onlyIfSource: AUDIO_SOURCE });
     }
 
     const nextSettings = await loadSettings();
@@ -215,15 +289,19 @@ async function reconcileAudioClock() {
   const audible = await hasAudibleTabs();
 
   if (audible) {
-    for (const session of autoManagedSessions) {
+    for (const session of audioManagedSessions) {
       if (session.profileId !== profile.id) {
-        await stopClock(session.profileId, { onlyIfAuto: true });
+        await stopClock(session.profileId, {
+          sessionId: session.id,
+          onlyIfAuto: true,
+          onlyIfSource: AUDIO_SOURCE
+        });
       }
     }
 
     if (!activeSession) {
       await startClock(profile.id, {
-        source: "tab-audio",
+        source: AUDIO_SOURCE,
         autoManaged: true
       });
     }
@@ -233,8 +311,55 @@ async function reconcileAudioClock() {
     return;
   }
 
-  for (const session of autoManagedSessions) {
-    await stopClock(session.profileId, { onlyIfAuto: true });
+  for (const session of audioManagedSessions) {
+    await stopClock(session.profileId, {
+      sessionId: session.id,
+      onlyIfAuto: true,
+      onlyIfSource: AUDIO_SOURCE
+    });
+  }
+
+  const nextSettings = await loadSettings();
+  await updateActionIcon(nextSettings);
+  await updateActionBadge(nextSettings);
+}
+
+async function reconcileAnkiReviewClock() {
+  const settings = await loadSettings();
+  const ankiManagedSessions = getAutoManagedSessions(settings, ANKI_REVIEW_SOURCE);
+  const reviewState = await getAnkiReviewState(settings);
+
+  if (!reviewState.reviewing) {
+    for (const session of ankiManagedSessions) {
+      await stopClock(session.profileId, {
+        sessionId: session.id,
+        onlyIfAuto: true,
+        onlyIfSource: ANKI_REVIEW_SOURCE
+      });
+    }
+
+    const nextSettings = await loadSettings();
+    await updateActionIcon(nextSettings);
+    await updateActionBadge(nextSettings);
+    return;
+  }
+
+  for (const session of ankiManagedSessions) {
+    if (session.profileId !== MIGAKU_STUDY_PROFILE_ID) {
+      await stopClock(session.profileId, {
+        sessionId: session.id,
+        onlyIfAuto: true,
+        onlyIfSource: ANKI_REVIEW_SOURCE
+      });
+    }
+  }
+
+  const ankiSession = getActiveSession(settings, MIGAKU_STUDY_PROFILE_ID);
+  if (!ankiSession) {
+    await startClock(MIGAKU_STUDY_PROFILE_ID, {
+      source: ANKI_REVIEW_SOURCE,
+      autoManaged: true
+    });
   }
 
   const nextSettings = await loadSettings();
@@ -251,6 +376,12 @@ async function ensureSyncAlarm() {
 async function ensureBadgeAlarm() {
   await chrome.alarms.create(BADGE_ALARM_NAME, {
     periodInMinutes: BADGE_INTERVAL_MINUTES
+  });
+}
+
+async function ensureAnkiReviewAlarm() {
+  await chrome.alarms.create(ANKI_REVIEW_ALARM_NAME, {
+    periodInMinutes: ANKI_REVIEW_INTERVAL_MINUTES
   });
 }
 
@@ -272,11 +403,15 @@ async function runFolderSync() {
 
 chrome.runtime.onInstalled.addListener(() => {
   void ensureSyncAlarm();
+  void ensureAnkiReviewAlarm();
+  void scheduleAnkiReviewLoop(1000);
   scheduleReconcile();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   void ensureSyncAlarm();
+  void ensureAnkiReviewAlarm();
+  void scheduleAnkiReviewLoop(1000);
   scheduleReconcile();
 });
 
@@ -286,7 +421,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     return;
   }
   if (alarm.name === BADGE_ALARM_NAME) {
+    void reconcileState();
     void loadSettings().then(updateActionBadge);
+    return;
+  }
+  if (alarm.name === ANKI_REVIEW_ALARM_NAME) {
+    void reconcileState();
+    void scheduleAnkiReviewLoop(1000);
   }
 });
 
@@ -305,8 +446,24 @@ chrome.tabs.onActivated.addListener(() => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === "local" && (changes.activeProfileId || changes.sessions || changes.autoClockOnAudio)) {
+  if (areaName === "local" && (
+    changes.activeProfileId ||
+    changes.sessions ||
+    changes.autoClockOnAudio ||
+    changes.ankiConnectEnabled ||
+    changes.ankiConnectHost ||
+    changes.ankiConnectPort ||
+    changes.autoProfileOverrideId ||
+    changes.autoProfilePreviousId
+  )) {
     scheduleReconcile();
+    if (changes.ankiConnectEnabled || changes.ankiConnectHost || changes.ankiConnectPort) {
+      if (changes.ankiConnectEnabled && !changes.ankiConnectEnabled.newValue) {
+        clearAnkiReviewLoop();
+      } else {
+        void scheduleAnkiReviewLoop(500);
+      }
+    }
     void loadSettings().then(updateActionBadge);
   }
 });
@@ -317,5 +474,7 @@ void loadSettings().then((settings) => {
 });
 void ensureSyncAlarm();
 void ensureBadgeAlarm();
+void ensureAnkiReviewAlarm();
+void scheduleAnkiReviewLoop(1000);
 void runFolderSync();
 scheduleReconcile();
