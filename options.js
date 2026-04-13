@@ -2,6 +2,7 @@ const {
   buildExportCsv,
   getProfile,
   loadSettings,
+  normalizeProfileColor,
   normalizeSettings,
   parseImportedSessions,
   saveSettings,
@@ -124,7 +125,20 @@ function renderProfilesList() {
     input.placeholder = "Profile name";
     input.addEventListener("input", (event) => {
       profile.name = event.target.value;
+      setStatus("");
       renderProfileGoalSelect();
+      renderImportProfileSelect();
+      renderExportProfileSelect();
+    });
+
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = normalizeProfileColor(profile.color, profile.name);
+    colorInput.className = "profile-color-input";
+    colorInput.setAttribute("aria-label", `${profile.name || "Profile"} color`);
+    colorInput.addEventListener("input", (event) => {
+      profile.color = event.target.value;
+      setStatus("");
     });
 
     const actions = document.createElement("div");
@@ -158,9 +172,11 @@ function renderProfilesList() {
       }
       renderProfilesList();
       renderProfileGoalSelect();
+      renderImportProfileSelect();
+      renderExportProfileSelect();
     });
 
-    actions.append(makeActiveButton, removeButton);
+    actions.append(colorInput, makeActiveButton, removeButton);
     item.append(input, actions);
     profilesList.append(item);
   }
@@ -180,10 +196,13 @@ function addProfile() {
   draftSettings.profiles.push({
     id: slugifyProfileName(`${baseName}-${Date.now()}`),
     name: baseName,
-    superGoalMinutes: 30
+    superGoalMinutes: 30,
+    color: normalizeProfileColor("", baseName)
   });
   renderProfilesList();
   renderProfileGoalSelect();
+  renderImportProfileSelect();
+  renderExportProfileSelect();
 }
 
 function syncDraftFromInputs() {
@@ -198,7 +217,8 @@ function syncDraftFromInputs() {
   draftSettings.profiles = draftSettings.profiles.map((profile, index) => ({
     ...profile,
     name: profile.name.trim() || `Profile ${index + 1}`,
-    id: profile.id || slugifyProfileName(profile.name || `profile-${index + 1}`)
+    id: profile.id || slugifyProfileName(profile.name || `profile-${index + 1}`),
+    color: normalizeProfileColor(profile.color, profile.name || `Profile ${index + 1}`)
   }));
 }
 

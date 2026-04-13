@@ -12,6 +12,12 @@
   --accent-soft: #bdfdbb;
   --grid: rgba(148, 163, 184, 0.32);
   --tooltip-bg: rgba(12, 17, 24, 0.96);
+  --control-bg: rgba(255, 255, 255, 0.08);
+  --control-bg-hover: rgba(255, 255, 255, 0.12);
+  --control-border: rgba(255, 255, 255, 0.12);
+  --control-option-bg: #252b36;
+  --control-option-text: #eef3f8;
+  --control-option-disabled: #7f8a9d;
 }
 
 * {
@@ -117,11 +123,45 @@ h2 {
 .control select {
   min-width: 108px;
   height: 34px;
-  padding: 0 10px;
+  padding: 0 34px 0 10px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--control-border);
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #d9dce2 50%),
+    linear-gradient(135deg, #d9dce2 50%, transparent 50%),
+    linear-gradient(180deg, var(--control-bg), var(--control-bg));
+  background-position:
+    calc(100% - 15px) 13px,
+    calc(100% - 9px) 13px,
+    0 0;
+  background-size:
+    6px 6px,
+    6px 6px,
+    100% 100%;
+  background-repeat: no-repeat;
   color: var(--text);
+}
+
+.control select:hover:not(:disabled) {
+  background-image:
+    linear-gradient(45deg, transparent 50%, #eef3f8 50%),
+    linear-gradient(135deg, #eef3f8 50%, transparent 50%),
+    linear-gradient(180deg, var(--control-bg-hover), var(--control-bg-hover));
+}
+
+.control select:focus-visible {
+  outline: 2px solid rgba(235, 182, 232, 0.6);
+  outline-offset: 2px;
+}
+
+.control select option {
+  background: var(--control-option-bg);
+  color: var(--control-option-text);
+}
+
+.control select option:disabled {
+  color: var(--control-option-disabled);
 }
 
 .control select:disabled {

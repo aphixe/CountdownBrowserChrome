@@ -159,6 +159,15 @@ select,
 .profile-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.profile-color-input {
+  width: 48px;
+  min-width: 48px;
+  padding: 4px;
+  cursor: pointer;
 }
 
 button {
@@ -196,6 +205,15 @@ button {
   .footer {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .profile-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .profile-actions {
+    justify-content: flex-end;
   }
 
   .goal-time-inputs {

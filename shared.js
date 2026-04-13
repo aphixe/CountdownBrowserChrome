@@ -1,9 +1,9 @@
 (function () {
   const root = typeof globalThis !== "undefined" ? globalThis : window;
   const DEFAULT_PROFILES = [
-    { id: "activate-immersion", name: "Activate Immersion", superGoalMinutes: 30 },
-    { id: "passive-immersion", name: "Passive Immersion", superGoalMinutes: 30 },
-    { id: "anki-migaku", name: "Anki/Migaku", superGoalMinutes: 30 }
+    { id: "activate-immersion", name: "Activate Immersion", superGoalMinutes: 30, color: "#38bdf8" },
+    { id: "passive-immersion", name: "Passive Immersion", superGoalMinutes: 30, color: "#f472b6" },
+    { id: "anki-migaku", name: "Anki/Migaku", superGoalMinutes: 30, color: "#22c55e" }
   ];
 
   const DEFAULT_SETTINGS = {
@@ -36,9 +36,6 @@
     "#14b8a6",
     "#eab308"
   ];
-  const ACTIVE_GRAPH_LINE_COLOR = "#6dd3fb";
-  const ACTIVE_GRAPH_DOT_COLOR = "#ebb6e8";
-  const ACTIVE_GRAPH_FILL_COLOR = "#6dd3fb";
   const SYNC_ALARM_NAME = "folder-sync";
   const SYNC_INTERVAL_MINUTES = 5;
   const DIRECTORY_DB_NAME = "countdown-pro-sync";
@@ -135,7 +132,8 @@
       ? settings.profiles.map((profile, index) => ({
           id: profile.id || `profile-${index + 1}`,
           name: profile.name || `Profile ${index + 1}`,
-          superGoalMinutes: Number(profile.superGoalMinutes) > 0 ? Number(profile.superGoalMinutes) : 30
+          superGoalMinutes: Number(profile.superGoalMinutes) > 0 ? Number(profile.superGoalMinutes) : 30,
+          color: normalizeProfileColor(profile.color, profile.name || `Profile ${index + 1}`)
         }))
       : defaults.profiles;
     for (const defaultProfile of DEFAULT_PROFILES) {
@@ -188,19 +186,19 @@
   function getPaletteProfileColor(label) {
     const text = String(label || "").trim().toLowerCase();
     const seed = Array.from(text).reduce((sum, char) => sum + char.charCodeAt(0), 0);
-    return PROFILE_COLOR_PALETTE[seed % PROFILE_COLOR_PALETTE.length] || ACTIVE_GRAPH_LINE_COLOR;
+    return PROFILE_COLOR_PALETTE[seed % PROFILE_COLOR_PALETTE.length] || PROFILE_COLOR_PALETTE[0];
+  }
+
+  function normalizeProfileColor(color, label) {
+    const value = String(color || "").trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(value)) {
+      return value.toLowerCase();
+    }
+    return getPaletteProfileColor(label);
   }
 
   function getGraphColorsForProfile(profile, activeProfileId) {
-    if (profile.id === activeProfileId) {
-      return {
-        lineColor: ACTIVE_GRAPH_LINE_COLOR,
-        dotColor: ACTIVE_GRAPH_DOT_COLOR,
-        fillColor: ACTIVE_GRAPH_FILL_COLOR
-      };
-    }
-
-    const paletteColor = getPaletteProfileColor(profile.name);
+    const paletteColor = normalizeProfileColor(profile?.color, profile?.name);
     return {
       lineColor: paletteColor,
       dotColor: paletteColor,
@@ -780,6 +778,7 @@
     getProfile,
     getGraphColorsForProfile,
     getPaletteProfileColor,
+    normalizeProfileColor,
     getSyncFolderHandle,
     getStreakStats,
     getTodayStats,
