@@ -46,7 +46,9 @@
             </div>
             <div id="calendarTooltip" class="calendar-tooltip" hidden></div>
             <div id="calendarContextMenu" class="calendar-context-menu" hidden>
+              <button id="addTimeButton" class="calendar-context-action" type="button">Add Time</button>
               <button id="editBlockButton" class="calendar-context-action" type="button">Edit</button>
+              <button id="deleteBlockButton" class="calendar-context-action" type="button">Delete</button>
               <button id="undoEditButton" class="calendar-context-action" type="button">Undo Last Edit</button>
             </div>
           </div>
@@ -68,6 +70,10 @@
         </div>
       </header>
       <form id="editBlockForm" class="edit-dialog-form">
+        <label id="editProfileField" class="edit-field" hidden>
+          <span>Profile</span>
+          <select id="editProfileSelect" required></select>
+        </label>
         <label class="edit-field">
           <span>Start time</span>
           <input id="editStartTimeInput" type="time" required step="60">

@@ -30,9 +30,14 @@ const nowLine = document.getElementById("nowLine");
 const nowBubble = document.getElementById("nowBubble");
 const calendarTooltip = document.getElementById("calendarTooltip");
 const calendarContextMenu = document.getElementById("calendarContextMenu");
+const addTimeButton = document.getElementById("addTimeButton");
 const editBlockButton = document.getElementById("editBlockButton");
+const deleteBlockButton = document.getElementById("deleteBlockButton");
 const undoEditButton = document.getElementById("undoEditButton");
 const editDialogBackdrop = document.getElementById("editDialogBackdrop");
+const editDialogTitle = document.getElementById("editDialogTitle");
+const editProfileField = document.getElementById("editProfileField");
+const editProfileSelect = document.getElementById("editProfileSelect");
 const editDialogSubtitle = document.getElementById("editDialogSubtitle");
 const editBlockForm = document.getElementById("editBlockForm");
 const editStartTimeInput = document.getElementById("editStartTimeInput");
@@ -49,7 +54,10 @@ const state = {
   pixelsPerMinute: 2.2,
   nowTimerId: null,
   contextSessionId: "",
+  contextDayIndex: null,
+  contextStartMinutes: null,
   editingSessionId: "",
+  editMode: "edit",
   lastEditSnapshot: null
 };
 
@@ -146,6 +154,13 @@ function formatTimeInputValue(date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+function minutesToTimeInputValue(totalMinutes) {
+  const safeMinutes = Math.max(0, Math.min((24 * 60) - 1, Math.round(Number(totalMinutes) || 0)));
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
 function formatShortDuration(seconds) {
   const totalMinutes = Math.max(0, Math.round((Number(seconds) || 0) / 60));
   const hours = Math.floor(totalMinutes / 60);
@@ -207,6 +222,44 @@ function parseSession(session) {
 
 function getSessionById(settings, sessionId) {
   return (settings.sessions || []).find((session) => session.id === sessionId) || null;
+}
+
+function cloneSession(session) {
+  return session
+    ? {
+        id: session.id,
+        profileId: session.profileId,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        source: session.source,
+        autoManaged: session.autoManaged
+      }
+    : null;
+}
+
+function getDefaultProfileId(settings) {
+  const profiles = settings.profiles || [];
+  if (!profiles.length) {
+    return "";
+  }
+  if (state.selectedProfileId !== CALENDAR_PROFILE_ALL && profiles.some((profile) => profile.id === state.selectedProfileId)) {
+    return state.selectedProfileId;
+  }
+  if (settings.activeProfileId && profiles.some((profile) => profile.id === settings.activeProfileId)) {
+    return settings.activeProfileId;
+  }
+  return profiles[0].id;
+}
+
+function fillEditProfileSelect(settings, selectedProfileId) {
+  editProfileSelect.innerHTML = "";
+  for (const profile of settings.profiles || []) {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = profile.name;
+    option.selected = profile.id === selectedProfileId;
+    editProfileSelect.append(option);
+  }
 }
 
 function splitSessionByDay(session) {
@@ -440,18 +493,25 @@ function hideTooltip() {
 function hideContextMenu() {
   calendarContextMenu.hidden = true;
   state.contextSessionId = "";
+  state.contextDayIndex = null;
+  state.contextStartMinutes = null;
 }
 
-function showContextMenu(sessionId, event) {
+function showContextMenu(options, event) {
   const surfaceRect = calendarSurface.getBoundingClientRect();
+  state.contextSessionId = options.sessionId || "";
+  state.contextDayIndex = Number.isInteger(options.dayIndex) ? options.dayIndex : null;
+  state.contextStartMinutes = Number.isFinite(options.startMinutes) ? options.startMinutes : null;
+  addTimeButton.hidden = !options.allowAdd;
+  editBlockButton.hidden = !options.allowEdit;
+  deleteBlockButton.hidden = !options.allowDelete;
   undoEditButton.disabled = !state.lastEditSnapshot;
   calendarContextMenu.hidden = false;
   calendarContextMenu.style.left = "0px";
   calendarContextMenu.style.top = "0px";
-  state.contextSessionId = sessionId;
 
   const menuWidth = calendarContextMenu.offsetWidth || 120;
-  const menuHeight = calendarContextMenu.offsetHeight || 46;
+  const menuHeight = calendarContextMenu.offsetHeight || 80;
   const left = Math.min(
     event.clientX - surfaceRect.left + 4,
     surfaceRect.width - menuWidth - 8
@@ -463,7 +523,10 @@ function showContextMenu(sessionId, event) {
 
   calendarContextMenu.style.left = `${Math.max(8, left)}px`;
   calendarContextMenu.style.top = `${Math.max(8, top)}px`;
-  editBlockButton.focus();
+  const initialFocusButton = options.allowAdd
+    ? addTimeButton
+    : (options.allowEdit ? editBlockButton : deleteBlockButton);
+  initialFocusButton.focus();
 }
 
 function openEditDialog(sessionId) {
@@ -479,8 +542,11 @@ function openEditDialog(sessionId) {
     return;
   }
 
+  state.editMode = "edit";
   state.editingSessionId = sessionId;
-  editDialogSubtitle.textContent = `${session.profileId ? "Session" : "Block"} time`;
+  editDialogTitle.textContent = "Edit Block Time";
+  editDialogSubtitle.textContent = `${formatHeaderDay(parsed.startedAt)}`;
+  editProfileField.hidden = true;
   editStartTimeInput.value = formatTimeInputValue(parsed.startedAt);
   editEndTimeInput.value = formatTimeInputValue(parsed.endedAt);
   editDialogStatus.textContent = "";
@@ -489,10 +555,38 @@ function openEditDialog(sessionId) {
   editStartTimeInput.focus();
 }
 
+function openAddDialog() {
+  if (!state.settings || state.contextDayIndex === null) {
+    hideContextMenu();
+    return;
+  }
+
+  const dayDate = addDays(state.weekStart, state.contextDayIndex);
+  const defaultStartMinutes = Number.isFinite(state.contextStartMinutes)
+    ? state.contextStartMinutes
+    : ((new Date().getHours() * 60) + new Date().getMinutes());
+  const roundedStartMinutes = Math.max(0, Math.min((24 * 60) - 1, Math.round(defaultStartMinutes / 5) * 5));
+  const defaultEndMinutes = Math.min(24 * 60, roundedStartMinutes + 30);
+
+  state.editMode = "add";
+  state.editingSessionId = "";
+  editDialogTitle.textContent = "Add Time";
+  editProfileField.hidden = false;
+  fillEditProfileSelect(state.settings, getDefaultProfileId(state.settings));
+  editDialogSubtitle.textContent = `${formatHeaderDay(dayDate)}`;
+  editStartTimeInput.value = minutesToTimeInputValue(roundedStartMinutes);
+  editEndTimeInput.value = minutesToTimeInputValue(Math.max(roundedStartMinutes + 1, defaultEndMinutes - (defaultEndMinutes === 24 * 60 ? 1 : 0)));
+  editDialogStatus.textContent = "";
+  editDialogBackdrop.hidden = false;
+  hideContextMenu();
+  editProfileSelect.focus();
+}
+
 function closeEditDialog() {
   editDialogBackdrop.hidden = true;
   editDialogStatus.textContent = "";
   state.editingSessionId = "";
+  state.editMode = "edit";
 }
 
 function applyEditedSessionTimes(session, startTimeValue, endTimeValue) {
@@ -524,24 +618,58 @@ async function saveEditedBlock(event) {
   event.preventDefault();
   editDialogStatus.textContent = "";
 
-  const session = getSessionById(state.settings, state.editingSessionId);
-  if (!session) {
-    editDialogStatus.textContent = "That block could not be found.";
-    return;
-  }
-
   if (!editStartTimeInput.value || !editEndTimeInput.value) {
     editDialogStatus.textContent = "Choose both start and end times.";
     return;
   }
 
   try {
-    state.lastEditSnapshot = {
-      sessionId: session.id,
-      startedAt: session.startedAt,
-      endedAt: session.endedAt
-    };
-    applyEditedSessionTimes(session, editStartTimeInput.value, editEndTimeInput.value);
+    if (state.editMode === "add") {
+      const profileId = editProfileSelect.value;
+      if (!profileId) {
+        editDialogStatus.textContent = "Choose a profile.";
+        return;
+      }
+
+      const dayDate = addDays(state.weekStart, state.contextDayIndex || 0);
+      const [startHours, startMinutes] = editStartTimeInput.value.split(":").map(Number);
+      const [endHours, endMinutes] = editEndTimeInput.value.split(":").map(Number);
+      const startedAt = new Date(dayDate);
+      startedAt.setHours(startHours || 0, startMinutes || 0, 0, 0);
+      const endedAt = new Date(dayDate);
+      endedAt.setHours(endHours || 0, endMinutes || 0, 0, 0);
+      if (endedAt <= startedAt) {
+        endedAt.setDate(endedAt.getDate() + 1);
+      }
+      if (endedAt <= startedAt) {
+        throw new Error("End time must be after start time.");
+      }
+
+      const session = {
+        id: crypto.randomUUID(),
+        profileId,
+        startedAt: startedAt.toISOString(),
+        endedAt: endedAt.toISOString()
+      };
+      state.settings.sessions = (state.settings.sessions || []).concat(session);
+      state.lastEditSnapshot = {
+        type: "delete-added",
+        session: cloneSession(session)
+      };
+    } else {
+      const session = getSessionById(state.settings, state.editingSessionId);
+      if (!session) {
+        editDialogStatus.textContent = "That block could not be found.";
+        return;
+      }
+
+      state.lastEditSnapshot = {
+        type: "restore-times",
+        session: cloneSession(session)
+      };
+      applyEditedSessionTimes(session, editStartTimeInput.value, editEndTimeInput.value);
+    }
+
     state.settings = await saveSettings(state.settings);
     closeEditDialog();
     drawCalendar();
@@ -556,25 +684,81 @@ async function undoLastEdit() {
     return;
   }
 
-  const session = getSessionById(state.settings, state.lastEditSnapshot.sessionId);
-  if (!session) {
-    state.lastEditSnapshot = null;
+  const snapshot = state.lastEditSnapshot;
+  let nextSnapshot = null;
+
+  if (snapshot.type === "delete-added") {
+    state.settings.sessions = (state.settings.sessions || []).filter((entry) => entry.id !== snapshot.session.id);
+  } else if (snapshot.type === "restore-times") {
+    const session = getSessionById(state.settings, snapshot.session.id);
+    if (!session) {
+      state.lastEditSnapshot = null;
+      hideContextMenu();
+      return;
+    }
+
+    nextSnapshot = {
+      type: "restore-times",
+      session: cloneSession(session)
+    };
+    session.startedAt = snapshot.session.startedAt;
+    session.endedAt = snapshot.session.endedAt;
+  } else if (snapshot.type === "restore-deleted") {
+    const existingSession = getSessionById(state.settings, snapshot.session.id);
+    if (!existingSession) {
+      state.settings.sessions = (state.settings.sessions || []).concat(cloneSession(snapshot.session));
+      nextSnapshot = {
+        type: "delete-added",
+        session: cloneSession(snapshot.session)
+      };
+    }
+  }
+
+  state.settings = await saveSettings(state.settings);
+  state.lastEditSnapshot = nextSnapshot;
+  hideContextMenu();
+  drawCalendar();
+}
+
+async function deleteSelectedBlock() {
+  if (!state.contextSessionId) {
     hideContextMenu();
     return;
   }
 
-  const redoSnapshot = {
-    sessionId: session.id,
-    startedAt: session.startedAt,
-    endedAt: session.endedAt
-  };
+  const session = getSessionById(state.settings, state.contextSessionId);
+  if (!session) {
+    hideContextMenu();
+    return;
+  }
 
-  session.startedAt = state.lastEditSnapshot.startedAt;
-  session.endedAt = state.lastEditSnapshot.endedAt;
+  state.lastEditSnapshot = {
+    type: "restore-deleted",
+    session: cloneSession(session)
+  };
+  state.settings.sessions = (state.settings.sessions || []).filter((entry) => entry.id !== session.id);
   state.settings = await saveSettings(state.settings);
-  state.lastEditSnapshot = redoSnapshot;
   hideContextMenu();
   drawCalendar();
+}
+
+function getContextSlotFromEvent(event) {
+  const columns = Array.from(calendarGrid.children);
+  if (!columns.length) {
+    return null;
+  }
+
+  const surfaceRect = calendarSurface.getBoundingClientRect();
+  const x = event.clientX - surfaceRect.left;
+  const y = event.clientY - surfaceRect.top;
+  const columnWidth = columns[0].offsetWidth;
+  if (columnWidth <= 0) {
+    return null;
+  }
+
+  const dayIndex = Math.max(0, Math.min(6, Math.floor(x / columnWidth)));
+  const startMinutes = Math.max(0, Math.min((24 * 60) - 1, y / state.pixelsPerMinute));
+  return { dayIndex, startMinutes };
 }
 
 function showTooltip(target, event) {
@@ -782,32 +966,58 @@ async function initialize() {
     hideTooltip();
   });
 
-  calendarBlocks.addEventListener("contextmenu", (event) => {
+  calendarSurface.addEventListener("contextmenu", (event) => {
     const target = event.target instanceof Element
       ? event.target.closest(".calendar-block")
       : null;
-    if (!target) {
-      hideContextMenu();
-      return;
-    }
-
     event.preventDefault();
-    const sessionId = target.dataset.sessionId || "";
-    if (!sessionId) {
+    if (target) {
+      const sessionId = target.dataset.sessionId || "";
+      if (!sessionId) {
+        hideContextMenu();
+        return;
+      }
+
+      const slot = getContextSlotFromEvent(event);
+      showTooltip(target, event);
+      showContextMenu({
+        sessionId,
+        dayIndex: slot?.dayIndex ?? null,
+        startMinutes: slot?.startMinutes ?? null,
+        allowAdd: true,
+        allowEdit: true,
+        allowDelete: true
+      }, event);
+      return;
+    }
+
+    hideTooltip();
+    const slot = getContextSlotFromEvent(event);
+    if (!slot) {
       hideContextMenu();
       return;
     }
 
-    showTooltip(target, event);
-    showContextMenu(sessionId, event);
+    showContextMenu({
+      sessionId: "",
+      dayIndex: slot.dayIndex,
+      startMinutes: slot.startMinutes,
+      allowAdd: true,
+      allowEdit: false,
+      allowDelete: false
+    }, event);
   });
 
+  addTimeButton.addEventListener("click", openAddDialog);
   editBlockButton.addEventListener("click", () => {
     if (!state.contextSessionId) {
       hideContextMenu();
       return;
     }
     openEditDialog(state.contextSessionId);
+  });
+  deleteBlockButton.addEventListener("click", () => {
+    void deleteSelectedBlock();
   });
   undoEditButton.addEventListener("click", () => {
     void undoLastEdit();

@@ -453,7 +453,18 @@ body {
   font: inherit;
 }
 
-.edit-field input:focus-visible {
+.edit-field select {
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #11161d;
+  color: var(--text);
+  padding: 0 10px;
+  font: inherit;
+}
+
+.edit-field input:focus-visible,
+.edit-field select:focus-visible {
   outline: 2px solid rgba(239, 176, 227, 0.65);
   outline-offset: 2px;
 }
