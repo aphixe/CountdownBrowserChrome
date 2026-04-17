@@ -3,6 +3,7 @@ importScripts("shared.js");
 const {
   SYNC_ALARM_NAME,
   SYNC_INTERVAL_MINUTES,
+  formatElapsedCounter,
   getActiveSession,
   getAnkiConnectStatus,
   invokeAnkiConnect,
@@ -18,6 +19,8 @@ const {
 let reconcileTimer = null;
 let iconState = null;
 let ankiReviewTimer = null;
+let badgeIntervalId = null;
+const migakuTabStates = new Map();
 const BADGE_ALARM_NAME = "badge-tick";
 const BADGE_INTERVAL_MINUTES = 1;
 const ANKI_REVIEW_ALARM_NAME = "anki-review-tick";
@@ -25,6 +28,7 @@ const ANKI_REVIEW_INTERVAL_MINUTES = 0.5;
 const ANKI_REVIEW_POLL_MS = 4000;
 const MIGAKU_STUDY_PROFILE_ID = "anki-migaku";
 const MIGAKU_STUDY_ORIGIN = "https://study.migaku.com";
+const MIGAKU_STUDY_SOURCE = "migaku-study-page";
 const ANKI_REVIEW_SOURCE = "anki-connect-review";
 const AUDIO_SOURCE = "tab-audio";
 const ANKI_AUTO_PROFILE_OVERRIDE_ID = "anki-review";
@@ -78,10 +82,14 @@ async function updateActionIcon(settings) {
 }
 
 function formatBadgeText(totalSeconds) {
-  const totalMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
-  if (totalMinutes <= 0) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  if (safeSeconds <= 0) {
     return "";
   }
+  if (safeSeconds < 60) {
+    return `${safeSeconds}s`;
+  }
+  const totalMinutes = Math.floor(safeSeconds / 60);
   if (totalMinutes < 60) {
     return `${totalMinutes}m`;
   }
@@ -94,10 +102,14 @@ function formatBadgeText(totalSeconds) {
 }
 
 function formatBadgeTitle(totalSeconds) {
-  const totalMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
-  if (totalMinutes <= 0) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  if (safeSeconds <= 0) {
     return "CountDown Pro";
   }
+  if (safeSeconds < 60) {
+    return `${formatElapsedCounter(safeSeconds)} tracked`;
+  }
+  const totalMinutes = Math.floor(safeSeconds / 60);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   if (hours === 0) {
@@ -125,6 +137,35 @@ async function updateActionBadge(settings) {
   await chrome.action.setBadgeBackgroundColor({ color: "#1f2937" });
   await chrome.action.setBadgeText({ text: badgeText });
   await chrome.action.setTitle({ title: formatBadgeTitle(today.totalSeconds) });
+}
+
+function stopBadgeTicker() {
+  if (badgeIntervalId) {
+    clearInterval(badgeIntervalId);
+    badgeIntervalId = null;
+  }
+}
+
+function startBadgeTicker() {
+  if (badgeIntervalId) {
+    return;
+  }
+
+  badgeIntervalId = setInterval(() => {
+    void loadSettings().then(updateActionBadge);
+  }, 1000);
+}
+
+function syncBadgeTicker(settings) {
+  const profile = getProfile(settings, settings.activeProfileId);
+  const activeSession = getActiveSession(settings, profile.id);
+
+  if (activeSession) {
+    startBadgeTicker();
+    return;
+  }
+
+  stopBadgeTicker();
 }
 
 function getAutoManagedSessions(settings, source = "") {
@@ -176,23 +217,24 @@ function isMigakuStudyUrl(urlString) {
   }
   try {
     const url = new URL(urlString);
-    if (url.origin !== MIGAKU_STUDY_ORIGIN) {
-      return false;
-    }
-    return url.pathname === "/study" || url.pathname.startsWith("/study/");
+    return url.origin === MIGAKU_STUDY_ORIGIN;
   } catch {
     return false;
   }
 }
 
+function isActiveMigakuStudyState(state) {
+  return Boolean(state && state.isStudy && !state.isSummary && !state.isHome);
+}
+
 async function hasAudibleTabs() {
   const tabs = await chrome.tabs.query({});
-  return tabs.some((tab) => tab.audible);
+  return tabs.some((tab) => tab.audible && !isMigakuStudyUrl(tab.url));
 }
 
 async function hasMigakuStudyTabs() {
   const tabs = await chrome.tabs.query({});
-  return tabs.some((tab) => isMigakuStudyUrl(tab.url));
+  return tabs.some((tab) => isMigakuStudyUrl(tab.url) && isActiveMigakuStudyState(migakuTabStates.get(tab.id)));
 }
 
 async function getAnkiReviewState(settings) {
@@ -265,8 +307,52 @@ async function reconcileAutoProfile() {
 
 async function reconcileState() {
   await reconcileAutoProfile();
+  await reconcileMigakuStudyClock();
   await reconcileAudioClock();
   await reconcileAnkiReviewClock();
+}
+
+async function reconcileMigakuStudyClock() {
+  const settings = await loadSettings();
+  const migakuManagedSessions = getAutoManagedSessions(settings, MIGAKU_STUDY_SOURCE);
+  const hasStudyTab = await hasMigakuStudyTabs();
+
+  if (!hasStudyTab) {
+    for (const session of migakuManagedSessions) {
+      await stopClock(session.profileId, {
+        sessionId: session.id,
+        onlyIfAuto: true,
+        onlyIfSource: MIGAKU_STUDY_SOURCE
+      });
+    }
+
+    const nextSettings = await loadSettings();
+    await updateActionIcon(nextSettings);
+    await updateActionBadge(nextSettings);
+    return;
+  }
+
+  for (const session of migakuManagedSessions) {
+    if (session.profileId !== MIGAKU_STUDY_PROFILE_ID) {
+      await stopClock(session.profileId, {
+        sessionId: session.id,
+        onlyIfAuto: true,
+        onlyIfSource: MIGAKU_STUDY_SOURCE
+      });
+    }
+  }
+
+  const migakuSession = getActiveSession(settings, MIGAKU_STUDY_PROFILE_ID);
+  if (!migakuSession) {
+    await startClock(MIGAKU_STUDY_PROFILE_ID, {
+      source: MIGAKU_STUDY_SOURCE,
+      autoManaged: true
+    });
+  }
+
+  const nextSettings = await loadSettings();
+  await updateActionIcon(nextSettings);
+  await updateActionBadge(nextSettings);
 }
 
 async function reconcileAudioClock() {
@@ -433,11 +519,15 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
   if ("audible" in changeInfo || "status" in changeInfo || "mutedInfo" in changeInfo || "url" in changeInfo) {
+    if (changeInfo.url && !isMigakuStudyUrl(changeInfo.url)) {
+      migakuTabStates.delete(_tabId);
+    }
     scheduleReconcile();
   }
 });
 
-chrome.tabs.onRemoved.addListener(() => {
+chrome.tabs.onRemoved.addListener((tabId) => {
+  migakuTabStates.delete(tabId);
   scheduleReconcile();
 });
 
@@ -457,6 +547,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     changes.autoProfilePreviousId
   )) {
     scheduleReconcile();
+    void loadSettings().then(syncBadgeTicker);
     if (changes.ankiConnectEnabled || changes.ankiConnectHost || changes.ankiConnectPort) {
       if (changes.ankiConnectEnabled && !changes.ankiConnectEnabled.newValue) {
         clearAnkiReviewLoop();
@@ -468,7 +559,23 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
 });
 
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (!message || message.type !== "migaku-page-state" || !sender.tab || typeof sender.tab.id !== "number") {
+    return false;
+  }
+
+  migakuTabStates.set(sender.tab.id, {
+    url: message.url || sender.tab.url || "",
+    isStudy: Boolean(message.isStudy),
+    isSummary: Boolean(message.isSummary),
+    isHome: Boolean(message.isHome)
+  });
+  scheduleReconcile();
+  return false;
+});
+
 void loadSettings().then((settings) => {
+  syncBadgeTicker(settings);
   void updateActionIcon(settings);
   void updateActionBadge(settings);
 });

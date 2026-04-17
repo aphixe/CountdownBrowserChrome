@@ -37,6 +37,8 @@ const state = {
   rangeEnd: startOfDay(new Date()),
   yearAnchor: new Date().getFullYear(),
   hoverIndex: null,
+  hoverCanvasX: null,
+  hoverCanvasY: null,
   pointsBySeries: new Map(),
   visibleSeries: [],
   valuesBySeries: new Map(),
@@ -259,11 +261,9 @@ function renderLegend() {
     const item = document.createElement("div");
     item.className = "legend-item";
 
-    const swatch = document.createElement("div");
-    swatch.className = "legend-swatch";
-    swatch.style.background = entry.lineColor;
-
     const label = document.createElement("label");
+    label.className = "legend-label";
+
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = state.enabledLabels.has(entry.label);
@@ -277,11 +277,15 @@ function renderLegend() {
       drawGraph();
     });
 
+    const swatch = document.createElement("div");
+    swatch.className = "legend-swatch";
+    swatch.style.background = entry.lineColor;
+
     const text = document.createElement("span");
     text.textContent = entry.label;
 
-    label.append(checkbox, text);
-    item.append(swatch, label);
+    label.append(checkbox, swatch, text);
+    item.append(label);
     legendGrid.append(item);
   }
 }
@@ -556,6 +560,8 @@ function drawGraph() {
     const x = plotRect.left + (stepX * index);
     context.fillText(label, x, plotRect.bottom + 12);
   }
+
+  drawHoverState(context);
 }
 
 function updateNavButtons() {
@@ -568,11 +574,104 @@ function updateNavButtons() {
 }
 
 function hideTooltip() {
+  const hadHover = state.hoverIndex !== null;
   graphTooltip.hidden = true;
   state.hoverIndex = null;
+  state.hoverCanvasX = null;
+  state.hoverCanvasY = null;
+  if (hadHover) {
+    drawGraph();
+  }
 }
 
-function renderTooltip(index, clientX, clientY) {
+function getHoverAnchor(index) {
+  const plotRect = state.plotRect;
+  if (!plotRect) {
+    return null;
+  }
+
+  const pointsAtIndex = state.visibleSeries
+    .map((series) => {
+      const point = state.pointsBySeries.get(series.label)?.[index];
+      return point ? { series, point } : null;
+    })
+    .filter(Boolean);
+
+  const fallbackPoint = {
+    x: plotRect.left + (state.dates.length <= 1 ? 0 : (plotRect.width / (state.dates.length - 1)) * index),
+    y: plotRect.bottom
+  };
+  const guideCanvasX = fallbackPoint.x;
+
+  let anchorPoint = fallbackPoint;
+  if (pointsAtIndex.length) {
+    const pointerCanvasY = state.hoverCanvasY ?? fallbackPoint.y;
+    anchorPoint = pointsAtIndex.reduce((closest, entry) => {
+      if (!closest) {
+        return entry.point;
+      }
+      return Math.abs(entry.point.y - pointerCanvasY) < Math.abs(closest.y - pointerCanvasY)
+        ? entry.point
+        : closest;
+    }, null) || fallbackPoint;
+  }
+
+  return {
+    guideX: graphScroll.offsetLeft + guideCanvasX - graphScroll.scrollLeft,
+    pointX: graphScroll.offsetLeft + anchorPoint.x - graphScroll.scrollLeft,
+    pointY: graphScroll.offsetTop + anchorPoint.y,
+    pointerY: graphScroll.offsetTop + (state.hoverCanvasY ?? anchorPoint.y)
+  };
+}
+
+function drawHoverState(context) {
+  if (
+    state.hoverIndex === null ||
+    !state.plotRect ||
+    state.hoverIndex < 0 ||
+    state.hoverIndex >= state.dates.length
+  ) {
+    return;
+  }
+
+  const plotRect = state.plotRect;
+  const pointsAtIndex = state.visibleSeries
+    .map((series) => {
+      const point = state.pointsBySeries.get(series.label)?.[state.hoverIndex];
+      return point ? { series, point } : null;
+    })
+    .filter(Boolean);
+
+  const fallbackX = plotRect.left + (state.dates.length <= 1
+    ? 0
+    : (plotRect.width / (state.dates.length - 1)) * state.hoverIndex);
+  const guideX = fallbackX;
+
+  context.save();
+  context.strokeStyle = "rgba(255, 255, 255, 0.28)";
+  context.lineWidth = 1;
+  context.setLineDash([5, 5]);
+  context.beginPath();
+  context.moveTo(guideX, plotRect.top);
+  context.lineTo(guideX, plotRect.bottom);
+  context.stroke();
+  context.setLineDash([]);
+
+  for (const { series, point } of pointsAtIndex) {
+    context.fillStyle = series.lineColor;
+    context.beginPath();
+    context.arc(point.x, point.y, series.isActive ? 5 : 4, 0, Math.PI * 2);
+    context.fill();
+
+    context.fillStyle = "rgba(17, 21, 30, 0.96)";
+    context.beginPath();
+    context.arc(point.x, point.y, series.isActive ? 2.5 : 2, 0, Math.PI * 2);
+    context.fill();
+  }
+  context.restore();
+}
+
+function renderTooltip(index) {
   if (index < 0 || index >= state.dates.length) {
     hideTooltip();
     return;
@@ -593,10 +692,23 @@ function renderTooltip(index, clientX, clientY) {
   graphTooltip.textContent = lines.join("\n");
   graphTooltip.hidden = false;
   const panelRect = graphPanel.getBoundingClientRect();
-  const left = Math.min(clientX - panelRect.left + 14, panelRect.width - graphTooltip.offsetWidth - 12);
-  const top = Math.min(clientY - panelRect.top + 14, panelRect.height - graphTooltip.offsetHeight - 12);
-  graphTooltip.style.left = `${Math.max(12, left)}px`;
-  graphTooltip.style.top = `${Math.max(12, top)}px`;
+  const anchor = getHoverAnchor(index);
+  if (!anchor) {
+    hideTooltip();
+    return;
+  }
+
+  const left = anchor.guideX;
+  let top = anchor.pointerY - graphTooltip.offsetHeight - 10;
+  if (top < 12) {
+    top = anchor.pointerY + 10;
+  }
+  if (top + graphTooltip.offsetHeight > panelRect.height - 12) {
+    top = panelRect.height - graphTooltip.offsetHeight - 12;
+  }
+
+  graphTooltip.style.left = `${left}px`;
+  graphTooltip.style.top = `${top}px`;
 }
 
 function handleCanvasPointerMove(event) {
@@ -606,8 +718,10 @@ function handleCanvasPointerMove(event) {
   }
 
   const rect = graphCanvas.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
+  const scaleX = rect.width > 0 ? graphCanvas.clientWidth / rect.width : 1;
+  const scaleY = rect.height > 0 ? graphCanvas.clientHeight / rect.height : 1;
+  const x = (event.clientX - rect.left) * scaleX;
+  const y = (event.clientY - rect.top) * scaleY;
 
   if (
     x < state.plotRect.left ||
@@ -623,13 +737,16 @@ function handleCanvasPointerMove(event) {
     ? 0
     : (x - state.plotRect.left) / state.plotRect.width;
   const index = Math.max(0, Math.min(state.dates.length - 1, Math.round(ratio * (state.dates.length - 1))));
+  state.hoverIndex = index;
+  state.hoverCanvasX = x;
+  state.hoverCanvasY = y;
+  drawGraph();
+
   if (state.hoverIndex === index && !graphTooltip.hidden) {
-    renderTooltip(index, event.clientX, event.clientY);
+    renderTooltip(index);
     return;
   }
-
-  state.hoverIndex = index;
-  renderTooltip(index, event.clientX, event.clientY);
+  renderTooltip(index);
 }
 
 function shiftRange(direction) {
@@ -707,6 +824,12 @@ async function initialize() {
   nextButton.addEventListener("click", () => shiftRange(1));
   graphCanvas.addEventListener("mousemove", handleCanvasPointerMove);
   graphCanvas.addEventListener("mouseleave", hideTooltip);
+  graphScroll.addEventListener("scroll", () => {
+    if (state.hoverIndex === null || graphTooltip.hidden) {
+      return;
+    }
+    renderTooltip(state.hoverIndex);
+  });
 
   window.addEventListener("resize", () => {
     applyWindowScale();

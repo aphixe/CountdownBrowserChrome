@@ -1,6 +1,7 @@
 const {
   buildDailyTotals,
   formatDuration,
+  formatElapsedCounter,
   formatGoalMinutes,
   getActiveSession,
   getDayTimeLeftSeconds,
@@ -302,7 +303,7 @@ async function render() {
   renderProfiles(settings);
   renderHeatmap(settings);
 
-  todayTimer.textContent = formatDuration(today.totalSeconds);
+  todayTimer.textContent = formatElapsedCounter(today.totalSeconds);
   dayTimeLeft.textContent = `Day time left: ${formatDuration(getDayTimeLeftSeconds(settings, now))}`;
   const goalSeconds = profile.superGoalMinutes * 60;
   const goalProgressPercent = goalSeconds > 0

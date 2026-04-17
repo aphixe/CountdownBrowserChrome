@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "CountDown Pro",
   "description": "Track focused daily time, streaks, yearly totals, and profile-based immersion goals.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "permissions": [
     "storage",
     "tabs",
@@ -10,7 +10,19 @@
   ],
   "host_permissions": [
     "http://127.0.0.1/*",
-    "http://localhost/*"
+    "http://localhost/*",
+    "https://study.migaku.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://study.migaku.com/*"
+      ],
+      "js": [
+        "migaku-content.js"
+      ],
+      "run_at": "document_idle"
+    }
   ],
   "background": {
     "service_worker": "background.js"

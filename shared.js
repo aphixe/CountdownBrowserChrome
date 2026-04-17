@@ -251,6 +251,14 @@
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
 
+  function formatElapsedCounter(totalSeconds) {
+    const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+    if (safeSeconds < 60) {
+      return `${safeSeconds}s`;
+    }
+    return formatDuration(safeSeconds);
+  }
+
   function formatGoalMinutes(minutes) {
     if (minutes % 60 === 0) {
       return `${minutes / 60}h`;
@@ -864,6 +872,7 @@
     clearSyncFolderHandle,
     createLocalDate,
     formatDuration,
+    formatElapsedCounter,
     formatGoalMinutes,
     getActiveSession,
     getDayTimeLeftSeconds,
