@@ -1,0 +1,1 @@
+node csv-sync-server.js "C:\yourlocationhere" --token "yourchoice"

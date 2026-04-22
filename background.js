@@ -1,8 +1,9 @@
 importScripts("shared.js");
 
 const {
-  SYNC_ALARM_NAME,
-  SYNC_INTERVAL_MINUTES,
+  AUTO_EXPORT_ALARM_NAME,
+  AUTO_EXPORT_INTERVAL_MINUTES,
+  buildExportCsv,
   formatElapsedCounter,
   getActiveSession,
   getAnkiConnectStatus,
@@ -10,8 +11,10 @@ const {
   getTodayStats,
   getProfile,
   loadSettings,
+  mergeImportedSessions,
+  parseImportedSessions,
   saveSettings,
-  syncSettingsWithFolder,
+  slugifyProfileName,
   startClock,
   stopClock
 } = globalThis.CountDownPro;
@@ -453,9 +456,10 @@ async function reconcileAnkiReviewClock() {
   await updateActionBadge(nextSettings);
 }
 
-async function ensureSyncAlarm() {
-  await chrome.alarms.create(SYNC_ALARM_NAME, {
-    periodInMinutes: SYNC_INTERVAL_MINUTES
+async function ensureAutoExportAlarm() {
+  await chrome.alarms.clear("folder-sync");
+  await chrome.alarms.create(AUTO_EXPORT_ALARM_NAME, {
+    periodInMinutes: AUTO_EXPORT_INTERVAL_MINUTES
   });
 }
 
@@ -471,39 +475,215 @@ async function ensureAnkiReviewAlarm() {
   });
 }
 
-async function runFolderSync() {
+function downloadCsvExport(filename, csvText) {
+  return chrome.downloads.download({
+    url: `data:text/csv;charset=utf-8,${encodeURIComponent(csvText)}`,
+    filename,
+    saveAs: false,
+    conflictAction: "overwrite"
+  });
+}
+
+function buildCsvExportFiles(settings) {
+  return (settings.profiles || []).map((profile) => {
+    const csvText = buildExportCsv(settings, profile.id);
+    const fileName = slugifyProfileName(profile.name || profile.id || "profile");
+    return {
+      filename: `${fileName}.csv`,
+      content: csvText,
+      profileId: profile.id,
+      profileName: profile.name || profile.id || "Profile"
+    };
+  });
+}
+
+function getCsvSyncServerUrl(settings, pathname) {
+  const url = new URL(settings.csvSyncServerUrl);
+  url.pathname = pathname;
+  url.search = "";
+  return url.toString();
+}
+
+async function downloadCsvExportFiles(files) {
+  for (const file of files) {
+    await downloadCsvExport(`CountDown Pro/${file.filename}`, file.content);
+  }
+}
+
+async function getCsvServerFiles(settings) {
+  const response = await fetch(getCsvSyncServerUrl(settings, "/files"), {
+    method: "GET",
+    headers: settings.csvSyncToken ? { "X-CountDown-Token": settings.csvSyncToken } : {}
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText.trim() || `Sync server returned HTTP ${response.status}.`);
+  }
+
+  const payload = await response.json();
+  return Array.isArray(payload.files) ? payload.files : [];
+}
+
+async function mergeCsvServerFiles(settings, files) {
+  const filesByName = new Map(
+    files
+      .filter((file) => file && typeof file.filename === "string")
+      .map((file) => [file.filename.toLowerCase(), file])
+  );
+  let importedCount = 0;
+  let updatedGoal = false;
+
+  for (const profile of settings.profiles || []) {
+    const fileName = `${slugifyProfileName(profile.name || profile.id || "profile")}.csv`;
+    const file = filesByName.get(fileName.toLowerCase());
+    if (!file || typeof file.content !== "string" || !file.content.trim()) {
+      continue;
+    }
+
+    const { sessions, goalMinutes } = parseImportedSessions(file.content, profile.id);
+    const mergedResult = mergeImportedSessions(settings.sessions || [], sessions);
+    settings.sessions = mergedResult.merged;
+    importedCount += mergedResult.importedCount;
+
+    if (goalMinutes && profile.superGoalMinutes !== goalMinutes) {
+      profile.superGoalMinutes = goalMinutes;
+      updatedGoal = true;
+    }
+  }
+
+  if (importedCount > 0 || updatedGoal) {
+    await saveSettings(settings);
+  }
+
+  return {
+    importedCount,
+    changed: importedCount > 0 || updatedGoal
+  };
+}
+
+function getCsvSyncServerHeaders(settings) {
+  const headers = {
+    "Content-Type": "application/json"
+  };
+
+  if (settings.csvSyncToken) {
+    headers["X-CountDown-Token"] = settings.csvSyncToken;
+  }
+
+  return headers;
+}
+
+async function postCsvExportFiles(settings, files) {
+  const response = await fetch(getCsvSyncServerUrl(settings, "/sync"), {
+    method: "POST",
+    headers: getCsvSyncServerHeaders(settings),
+    body: JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      files
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText.trim() || `Sync server returned HTTP ${response.status}.`);
+  }
+
+  return response.json().catch(() => ({}));
+}
+
+async function testCsvSyncServer() {
   const settings = await loadSettings();
-  if (!settings.syncEnabled || !settings.syncFolderName) {
+  if (settings.csvSyncTarget !== "server") {
+    return {
+      message: "Sync target is set to Downloads."
+    };
+  }
+
+  const response = await fetch(getCsvSyncServerUrl(settings, "/health"), {
+    method: "GET",
+    headers: settings.csvSyncToken ? { "X-CountDown-Token": settings.csvSyncToken } : {}
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText.trim() || `Sync server returned HTTP ${response.status}.`);
+  }
+
+  return {
+    message: "Sync server is reachable."
+  };
+}
+
+async function exportAllCsvFiles() {
+  let settings = await loadSettings();
+  const target = settings.csvSyncTarget === "server" ? "server" : "downloads";
+  let files = buildCsvExportFiles(settings);
+  let importedCount = 0;
+  let message = "";
+
+  if (target === "server") {
+    const serverFiles = await getCsvServerFiles(settings);
+    const mergeResult = await mergeCsvServerFiles(settings, serverFiles);
+    importedCount = mergeResult.importedCount;
+    if (mergeResult.changed) {
+      settings = await loadSettings();
+      files = buildCsvExportFiles(settings);
+    }
+    await postCsvExportFiles(settings, files);
+    message = importedCount > 0
+      ? `Synced ${files.length} CSV files to the local server. Imported ${importedCount} new sessions.`
+      : `Synced ${files.length} CSV files to the local server.`;
+  } else {
+    await downloadCsvExportFiles(files);
+    message = `Exported ${files.length} CSV files to Downloads.`;
+  }
+
+  await chrome.storage.local.set({
+    lastAutoExportAt: new Date().toISOString(),
+    lastAutoExportStatus: message
+  });
+
+  return {
+    count: files.length,
+    target,
+    message
+  };
+}
+
+async function runAutoExport() {
+  const settings = await loadSettings();
+  if (!settings.autoExportEnabled) {
     return;
   }
 
   try {
-    await syncSettingsWithFolder();
+    await exportAllCsvFiles();
   } catch (error) {
     await chrome.storage.local.set({
-      lastFolderSyncAt: new Date().toISOString(),
-      lastFolderSyncStatus: error && error.message ? error.message : "Folder sync failed."
+      lastAutoExportAt: new Date().toISOString(),
+      lastAutoExportStatus: error && error.message ? error.message : "Auto export failed."
     });
   }
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  void ensureSyncAlarm();
+  void ensureAutoExportAlarm();
   void ensureAnkiReviewAlarm();
   void scheduleAnkiReviewLoop(1000);
   scheduleReconcile();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  void ensureSyncAlarm();
+  void ensureAutoExportAlarm();
   void ensureAnkiReviewAlarm();
   void scheduleAnkiReviewLoop(1000);
   scheduleReconcile();
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === SYNC_ALARM_NAME) {
-    void runFolderSync();
+  if (alarm.name === AUTO_EXPORT_ALARM_NAME) {
+    void runAutoExport();
     return;
   }
   if (alarm.name === BADGE_ALARM_NAME) {
@@ -559,7 +739,39 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message, sender) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message && message.type === "export-all-csv") {
+    exportAllCsvFiles()
+      .then((result) => sendResponse({
+        ok: true,
+        count: result.count,
+        target: result.target,
+        message: result.message
+      }))
+      .catch((error) => {
+        sendResponse({
+          ok: false,
+          error: error && error.message ? error.message : "Export failed."
+        });
+      });
+    return true;
+  }
+
+  if (message && message.type === "test-csv-sync-server") {
+    testCsvSyncServer()
+      .then((result) => sendResponse({
+        ok: true,
+        message: result.message
+      }))
+      .catch((error) => {
+        sendResponse({
+          ok: false,
+          error: error && error.message ? error.message : "Sync server test failed."
+        });
+      });
+    return true;
+  }
+
   if (!message || message.type !== "migaku-page-state" || !sender.tab || typeof sender.tab.id !== "number") {
     return false;
   }
@@ -579,9 +791,9 @@ void loadSettings().then((settings) => {
   void updateActionIcon(settings);
   void updateActionBadge(settings);
 });
-void ensureSyncAlarm();
+void ensureAutoExportAlarm();
 void ensureBadgeAlarm();
 void ensureAnkiReviewAlarm();
 void scheduleAnkiReviewLoop(1000);
-void runFolderSync();
+void runAutoExport();
 scheduleReconcile();

@@ -39,6 +39,8 @@ const openTrendsButton = document.getElementById("openTrendsButton");
 const openCalendarButton = document.getElementById("openCalendarButton");
 const openAddTimeButton = document.getElementById("openAddTimeButton");
 const undoAddTimeButton = document.getElementById("undoAddTimeButton");
+const syncNowButton = document.getElementById("syncNowButton");
+const syncNowStatus = document.getElementById("syncNowStatus");
 const openSettingsButton = document.getElementById("openSettingsButton");
 const todayTimer = document.getElementById("todayTimer");
 const dayTimeLeft = document.getElementById("dayTimeLeft");
@@ -82,6 +84,17 @@ function cloneSession(session) {
 
 function updateUndoAddButton() {
   undoAddTimeButton.disabled = !lastManualAddSessionId;
+}
+
+function updateSyncNowButton(settings) {
+  syncNowButton.hidden = settings.csvSyncTarget !== "server";
+}
+
+function showSyncNowStatus(type) {
+  syncNowStatus.className = "sync-now-status";
+  syncNowStatus.textContent = type === "success" ? "✓" : "×";
+  void syncNowStatus.offsetWidth;
+  syncNowStatus.classList.add(type === "success" ? "is-success" : "is-error");
 }
 
 function renderProfiles(settings) {
@@ -318,6 +331,7 @@ async function render() {
   clockButton.textContent = activeSession ? "Clock Off" : "Clock On";
   clockButton.dataset.running = activeSession ? "true" : "false";
   autoClockOnAudioInput.checked = settings.autoClockOnAudio;
+  updateSyncNowButton(settings);
   updateFloatingWindowIcon(Boolean(activeSession));
   if (lastManualAddSessionId && !settings.sessions.some((session) => session.id === lastManualAddSessionId)) {
     lastManualAddSessionId = "";
@@ -487,6 +501,27 @@ async function undoLastManualAdd() {
   await renderAndResize();
 }
 
+async function syncNow() {
+  syncNowButton.disabled = true;
+  syncNowButton.classList.add("is-syncing");
+
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "export-all-csv" });
+    if (!response || !response.ok) {
+      throw new Error(response && response.error ? response.error : "Sync failed.");
+    }
+    syncNowButton.title = response.message || "Sync complete";
+    showSyncNowStatus("success");
+  } catch (error) {
+    syncNowButton.title = error && error.message ? error.message : "Sync failed.";
+    showSyncNowStatus("error");
+  } finally {
+    syncNowButton.classList.remove("is-syncing");
+    syncNowButton.disabled = false;
+    await renderAndResize();
+  }
+}
+
 async function initializePopup() {
   if (isFloatingWindow) {
     popOutButton.hidden = true;
@@ -511,6 +546,9 @@ async function initializePopup() {
   openAddTimeButton.addEventListener("click", openManualAddDialog);
   undoAddTimeButton.addEventListener("click", () => {
     void undoLastManualAdd();
+  });
+  syncNowButton.addEventListener("click", () => {
+    void syncNow();
   });
   openSettingsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
   manualAddForm.addEventListener("submit", saveManualTime);

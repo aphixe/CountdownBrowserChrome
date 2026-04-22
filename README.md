@@ -44,6 +44,26 @@ This project is a reimagined version of the original Countdown Pro Python app, b
 - Easily transfer your progress to another browser or machine
 - Great for backups
 
+### CSV Sync Server
+- Settings can sync CSV files every 10 minutes
+- Downloads mode writes to `Downloads/CountDown Pro`
+- Local sync server mode reads from and writes to a folder you choose outside Chrome, which works well with Syncthing
+
+Run the helper server with Node:
+
+```powershell
+node tools/csv-sync-server.js "D:\Syncthing\CountDown Pro" --token "choose-a-token"
+```
+
+On macOS, you can use the bundled helper script:
+
+```bash
+./tools/run-sync.sh
+```
+
+Then set the extension's CSV Sync target to `Local sync server`, URL to `http://127.0.0.1:8787/sync`, and token to the same value.
+For a LAN sync server, run with `--host 0.0.0.0` and use that machine's LAN IP in the extension.
+
 ---
 
 ## 🧩 Installation (Chrome / Chromium Browsers)

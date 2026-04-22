@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Sync">
+  <defs>
+    <linearGradient id="syncGradient" x1="10" y1="10" x2="54" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8ee7ff"/>
+      <stop offset="0.52" stop-color="#efb0e3"/>
+      <stop offset="1" stop-color="#c9f5b3"/>
+    </linearGradient>
+  </defs>
+  <path fill="none" stroke="url(#syncGradient)" stroke-linecap="round" stroke-linejoin="round" stroke-width="6" d="M49.5 23.5A20 20 0 0 0 14 21"/>
+  <path fill="url(#syncGradient)" d="M49.4 11.8c1.1-.7 2.6.1 2.6 1.4l.2 13.6c0 1.3-1.4 2.1-2.5 1.5L37.8 21.7c-1.1-.6-1.1-2.3 0-2.9l11.6-7Z"/>
+  <path fill="none" stroke="url(#syncGradient)" stroke-linecap="round" stroke-linejoin="round" stroke-width="6" d="M14.5 40.5A20 20 0 0 0 50 43"/>
+  <path fill="url(#syncGradient)" d="M14.6 52.2c-1.1.7-2.6-.1-2.6-1.4l-.2-13.6c0-1.3 1.4-2.1 2.5-1.5l11.9 6.6c1.1.6 1.1 2.3 0 2.9l-11.6 7Z"/>
+</svg>

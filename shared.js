@@ -14,21 +14,18 @@
     ankiConnectHost: "127.0.0.1",
     ankiConnectPort: 8765,
     autoClockOnAudio: true,
-    syncFolderName: "",
-    syncEnabled: false,
-    lastFolderSyncAt: "",
-    lastFolderSyncStatus: "",
+    autoExportEnabled: false,
+    csvSyncTarget: "downloads",
+    csvSyncServerUrl: "http://127.0.0.1:8787/sync",
+    csvSyncToken: "",
+    lastAutoExportAt: "",
+    lastAutoExportStatus: "",
     autoProfileOverrideId: "",
     autoProfilePreviousId: "",
     profiles: DEFAULT_PROFILES,
     sessions: []
   };
 
-  const SYNC_FILE_NAMES = {
-    "activate-immersion": "active.csv",
-    "passive-immersion": "passive.csv",
-    "anki-migaku": "anki.csv"
-  };
   const PROFILE_COLOR_PALETTE = [
     "#38bdf8",
     "#f472b6",
@@ -39,11 +36,8 @@
     "#14b8a6",
     "#eab308"
   ];
-  const SYNC_ALARM_NAME = "folder-sync";
-  const SYNC_INTERVAL_MINUTES = 5;
-  const DIRECTORY_DB_NAME = "countdown-pro-sync";
-  const DIRECTORY_STORE_NAME = "handles";
-  const DIRECTORY_HANDLE_KEY = "sync-folder";
+  const AUTO_EXPORT_ALARM_NAME = "csv-auto-export";
+  const AUTO_EXPORT_INTERVAL_MINUTES = 10;
 
   function cloneDefaults() {
     return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
@@ -134,10 +128,16 @@
     settings.autoClockOnAudio = typeof settings.autoClockOnAudio === "boolean"
       ? settings.autoClockOnAudio
       : defaults.autoClockOnAudio;
-    settings.syncFolderName = typeof settings.syncFolderName === "string" ? settings.syncFolderName : "";
-    settings.syncEnabled = Boolean(settings.syncEnabled);
-    settings.lastFolderSyncAt = typeof settings.lastFolderSyncAt === "string" ? settings.lastFolderSyncAt : "";
-    settings.lastFolderSyncStatus = typeof settings.lastFolderSyncStatus === "string" ? settings.lastFolderSyncStatus : "";
+    settings.autoExportEnabled = typeof settings.autoExportEnabled === "boolean"
+      ? settings.autoExportEnabled
+      : defaults.autoExportEnabled;
+    settings.csvSyncTarget = settings.csvSyncTarget === "server" ? "server" : defaults.csvSyncTarget;
+    settings.csvSyncServerUrl = typeof settings.csvSyncServerUrl === "string" && settings.csvSyncServerUrl.trim()
+      ? settings.csvSyncServerUrl.trim()
+      : defaults.csvSyncServerUrl;
+    settings.csvSyncToken = typeof settings.csvSyncToken === "string" ? settings.csvSyncToken : "";
+    settings.lastAutoExportAt = typeof settings.lastAutoExportAt === "string" ? settings.lastAutoExportAt : "";
+    settings.lastAutoExportStatus = typeof settings.lastAutoExportStatus === "string" ? settings.lastAutoExportStatus : "";
     settings.autoProfileOverrideId = typeof settings.autoProfileOverrideId === "string" ? settings.autoProfileOverrideId : "";
     settings.autoProfilePreviousId = typeof settings.autoProfilePreviousId === "string" ? settings.autoProfilePreviousId : "";
     settings.profiles = Array.isArray(settings.profiles) && settings.profiles.length
@@ -707,169 +707,13 @@
     return lines.join("\r\n");
   }
 
-  function openDirectoryDb() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DIRECTORY_DB_NAME, 1);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(DIRECTORY_STORE_NAME)) {
-          db.createObjectStore(DIRECTORY_STORE_NAME);
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("Failed to open sync folder database."));
-    });
-  }
-
-  async function withDirectoryStore(mode, callback) {
-    const db = await openDirectoryDb();
-
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(DIRECTORY_STORE_NAME, mode);
-      const store = transaction.objectStore(DIRECTORY_STORE_NAME);
-      const request = callback(store);
-
-      transaction.oncomplete = () => {
-        db.close();
-      };
-      transaction.onerror = () => {
-        db.close();
-        reject(transaction.error || new Error("Directory handle transaction failed."));
-      };
-
-      if (!request) {
-        resolve(undefined);
-        return;
-      }
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("Directory handle request failed."));
-    });
-  }
-
-  async function saveSyncFolderHandle(handle) {
-    await withDirectoryStore("readwrite", (store) => store.put(handle, DIRECTORY_HANDLE_KEY));
-  }
-
-  async function clearSyncFolderHandle() {
-    await withDirectoryStore("readwrite", (store) => store.delete(DIRECTORY_HANDLE_KEY));
-  }
-
-  async function getSyncFolderHandle() {
-    return withDirectoryStore("readonly", (store) => store.get(DIRECTORY_HANDLE_KEY));
-  }
-
-  async function verifyReadWritePermission(handle, prompt = false) {
-    if (!handle || typeof handle.queryPermission !== "function") {
-      return false;
-    }
-
-    const options = { mode: "readwrite" };
-    let permission = await handle.queryPermission(options);
-    if (permission === "granted") {
-      return true;
-    }
-
-    if (!prompt || typeof handle.requestPermission !== "function") {
-      return false;
-    }
-
-    permission = await handle.requestPermission(options);
-    return permission === "granted";
-  }
-
-  async function readCsvFileFromDirectory(directoryHandle, fileName) {
-    try {
-      const fileHandle = await directoryHandle.getFileHandle(fileName);
-      const file = await fileHandle.getFile();
-      return file.text();
-    } catch (error) {
-      if (error && error.name === "NotFoundError") {
-        return "";
-      }
-      throw error;
-    }
-  }
-
-  async function writeCsvFileToDirectory(directoryHandle, fileName, text) {
-    const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(text);
-    await writable.close();
-  }
-
-  async function syncSettingsWithFolder(options = {}) {
-    const directoryHandle = options.directoryHandle || await getSyncFolderHandle();
-    if (!directoryHandle) {
-      throw new Error("No sync folder selected.");
-    }
-
-    const hasPermission = await verifyReadWritePermission(directoryHandle, Boolean(options.promptForPermission));
-    if (!hasPermission) {
-      throw new Error("Folder permission is missing.");
-    }
-
-    let settings = await loadSettings();
-    const imports = [];
-    let foundExistingCsv = false;
-
-    for (const [profileId, fileName] of Object.entries(SYNC_FILE_NAMES)) {
-      const csvText = await readCsvFileFromDirectory(directoryHandle, fileName);
-      if (!csvText.trim()) {
-        continue;
-      }
-
-      foundExistingCsv = true;
-      const { sessions, goalMinutes } = parseImportedSessions(csvText, profileId);
-      const mergedResult = mergeImportedSessions(settings.sessions || [], sessions);
-      settings.sessions = mergedResult.merged;
-
-      const profile = settings.profiles.find((candidate) => candidate.id === profileId);
-      if (profile && goalMinutes) {
-        profile.superGoalMinutes = goalMinutes;
-      }
-
-      imports.push({
-        profileId,
-        fileName,
-        importedCount: mergedResult.importedCount
-      });
-    }
-
-    settings.syncEnabled = true;
-    settings.syncFolderName = directoryHandle.name || settings.syncFolderName || "";
-    settings.lastFolderSyncAt = new Date().toISOString();
-
-    if (foundExistingCsv) {
-      settings = await saveSettings(settings);
-    }
-
-    for (const [profileId, fileName] of Object.entries(SYNC_FILE_NAMES)) {
-      const csvText = buildExportCsv(settings, profileId);
-      await writeCsvFileToDirectory(directoryHandle, fileName, csvText);
-    }
-
-    settings.lastFolderSyncStatus = foundExistingCsv
-      ? "Loaded data from sync folder and saved the latest state."
-      : "Saved data to sync folder.";
-    settings = await saveSettings(settings);
-
-    return {
-      mode: foundExistingCsv ? "loaded" : "saved",
-      settings,
-      imports
-    };
-  }
-
   root.CountDownPro = {
-    SYNC_ALARM_NAME,
-    SYNC_FILE_NAMES,
-    SYNC_INTERVAL_MINUTES,
+    AUTO_EXPORT_ALARM_NAME,
+    AUTO_EXPORT_INTERVAL_MINUTES,
     DEFAULT_PROFILES,
     buildDailyTotals,
     buildGraphSeries,
     buildExportCsv,
-    clearSyncFolderHandle,
     createLocalDate,
     formatDuration,
     formatElapsedCounter,
@@ -880,7 +724,6 @@
     getGraphColorsForProfile,
     getPaletteProfileColor,
     normalizeProfileColor,
-    getSyncFolderHandle,
     getStreakStats,
     getTodayStats,
     getTrackingDayKey,
@@ -895,15 +738,10 @@
     normalizeSettings,
     parseCsvLine,
     parseImportedSessions,
-    readCsvFileFromDirectory,
     saveSettings,
-    saveSyncFolderHandle,
     slugifyProfileName,
     startClock,
     stopClock,
-    syncSettingsWithFolder,
-    invokeAnkiConnect,
-    verifyReadWritePermission,
-    writeCsvFileToDirectory
+    invokeAnkiConnect
   };
 })();

@@ -128,6 +128,41 @@
         </div>
       </section>
 
+      <section class="panel auto-export-panel">
+        <div class="panel-head">
+          <h2>CSV Sync</h2>
+        </div>
+        <label>
+          <span>Sync target</span>
+          <select id="csvSyncTargetSelect">
+            <option value="server">Local sync server</option>
+            <option value="downloads">Downloads folder</option>
+          </select>
+        </label>
+        <label class="toggle-row" for="autoExportEnabledInput">
+          <span>Auto sync every 10 minutes</span>
+          <input id="autoExportEnabledInput" type="checkbox">
+        </label>
+        <div id="syncServerFields" class="sync-server-fields">
+          <label>
+            <span>Server URL</span>
+            <input id="csvSyncServerUrlInput" type="url" placeholder="http://127.0.0.1:8787/sync" autocomplete="off" spellcheck="false">
+          </label>
+          <label>
+            <span>Token</span>
+            <input id="csvSyncTokenInput" type="password" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+        <p class="hint">The local sync server writes CSV files directly to a folder watched by Syncthing. Downloads mode may still follow Chrome's download prompt setting.</p>
+        <div class="footer import-actions">
+          <div id="autoExportStatus" class="save-status" aria-live="polite"></div>
+          <div class="auto-export-actions">
+            <button id="testSyncServerButton" class="secondary-button" type="button">Test Server</button>
+            <button id="exportAllNowButton" class="secondary-button" type="button">Sync Now</button>
+          </div>
+        </div>
+      </section>
+
       <footer class="footer">
         <div id="saveStatus" class="save-status" aria-live="polite"></div>
         <button id="saveButton" class="primary-button" type="button">Save Settings</button>

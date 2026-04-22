@@ -132,8 +132,17 @@ select,
   margin-top: 18px;
 }
 
-.sync-panel {
+.auto-export-panel {
   margin-top: 18px;
+}
+
+.sync-server-fields {
+  display: grid;
+  gap: 0;
+}
+
+.sync-server-fields[hidden] {
+  display: none;
 }
 
 .anki-panel {
@@ -142,10 +151,6 @@ select,
 
 .anki-grid {
   margin-top: 10px;
-}
-
-#syncFolderName[readonly] {
-  opacity: 0.85;
 }
 
 .toggle-row {
@@ -252,6 +257,13 @@ button {
   margin-top: 8px;
 }
 
+.auto-export-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 @media (max-width: 640px) {
   .page {
     padding: 14px;
@@ -277,5 +289,13 @@ button {
 
   .goal-time-inputs {
     grid-template-columns: 1fr;
+  }
+
+  .auto-export-actions {
+    justify-content: stretch;
+  }
+
+  .auto-export-actions button {
+    flex: 1;
   }
 }
