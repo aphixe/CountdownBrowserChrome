@@ -45,14 +45,16 @@ This project is a reimagined version of the original Countdown Pro Python app, b
 - Great for backups
 
 ### CSV Sync Server
-- Settings can sync CSV files every 10 minutes
-- Downloads mode writes to `Downloads/CountDown Pro`
-- Local sync server mode reads from and writes to a folder you choose outside Chrome, which works well with Syncthing
+- Settings can sync CSV files every 10 minutes when auto sync is enabled
+- CSV sync uses the local sync server to read from and write to a folder you choose outside Chrome, which works well with Syncthing
+- Helper scripts and full setup instructions live in the [`tools` folder](https://github.com/aphixe/CountdownBrowserChrome/tree/master/tools)
 
-Run the helper server with Node:
+Pick a folder where the CSV files should live, such as a Syncthing or Dropbox folder. Pick your own token value; it can be any text you want, but the extension setting must match the token you start the server with.
+
+Run the sync server with Node:
 
 ```powershell
-node tools/csv-sync-server.js "D:\Syncthing\CountDown Pro" --token "choose-a-token"
+node tools/csv-sync-server.js "D:\Syncthing\CountDown Pro" --token "your-private-token"
 ```
 
 On macOS, you can use the bundled helper script:
@@ -61,8 +63,9 @@ On macOS, you can use the bundled helper script:
 ./tools/run-sync.sh
 ```
 
-Then set the extension's CSV Sync target to `Local sync server`, URL to `http://127.0.0.1:8787/sync`, and token to the same value.
+Then set the extension's CSV Sync URL to `http://127.0.0.1:8787/sync`, and token to the same value.
 For a LAN sync server, run with `--host 0.0.0.0` and use that machine's LAN IP in the extension.
+See [`tools/README.md`](tools/README.md) for setup examples and options.
 
 ---
 

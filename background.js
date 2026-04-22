@@ -458,9 +458,13 @@ async function reconcileAnkiReviewClock() {
 
 async function ensureAutoExportAlarm() {
   await chrome.alarms.clear("folder-sync");
-  await chrome.alarms.create(AUTO_EXPORT_ALARM_NAME, {
-    periodInMinutes: AUTO_EXPORT_INTERVAL_MINUTES
-  });
+  await chrome.alarms.clear(AUTO_EXPORT_ALARM_NAME);
+  const settings = await loadSettings();
+  if (settings.autoExportEnabled) {
+    await chrome.alarms.create(AUTO_EXPORT_ALARM_NAME, {
+      periodInMinutes: AUTO_EXPORT_INTERVAL_MINUTES
+    });
+  }
 }
 
 async function ensureBadgeAlarm() {
@@ -472,15 +476,6 @@ async function ensureBadgeAlarm() {
 async function ensureAnkiReviewAlarm() {
   await chrome.alarms.create(ANKI_REVIEW_ALARM_NAME, {
     periodInMinutes: ANKI_REVIEW_INTERVAL_MINUTES
-  });
-}
-
-function downloadCsvExport(filename, csvText) {
-  return chrome.downloads.download({
-    url: `data:text/csv;charset=utf-8,${encodeURIComponent(csvText)}`,
-    filename,
-    saveAs: false,
-    conflictAction: "overwrite"
   });
 }
 
@@ -504,17 +499,30 @@ function getCsvSyncServerUrl(settings, pathname) {
   return url.toString();
 }
 
-async function downloadCsvExportFiles(files) {
-  for (const file of files) {
-    await downloadCsvExport(`CountDown Pro/${file.filename}`, file.content);
+function getSyncServerRequiredMessage() {
+  return "CSV sync server is not running. Enable CSV sync and start the local sync server in Settings.";
+}
+
+function normalizeCsvSyncError(error) {
+  if (error && error.message) {
+    if (error.message === "Failed to fetch" || error.name === "TypeError") {
+      return new Error(getSyncServerRequiredMessage());
+    }
+    return error;
   }
+  return new Error(getSyncServerRequiredMessage());
 }
 
 async function getCsvServerFiles(settings) {
-  const response = await fetch(getCsvSyncServerUrl(settings, "/files"), {
-    method: "GET",
-    headers: settings.csvSyncToken ? { "X-CountDown-Token": settings.csvSyncToken } : {}
-  });
+  let response;
+  try {
+    response = await fetch(getCsvSyncServerUrl(settings, "/files"), {
+      method: "GET",
+      headers: settings.csvSyncToken ? { "X-CountDown-Token": settings.csvSyncToken } : {}
+    });
+  } catch (error) {
+    throw normalizeCsvSyncError(error);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -575,14 +583,19 @@ function getCsvSyncServerHeaders(settings) {
 }
 
 async function postCsvExportFiles(settings, files) {
-  const response = await fetch(getCsvSyncServerUrl(settings, "/sync"), {
-    method: "POST",
-    headers: getCsvSyncServerHeaders(settings),
-    body: JSON.stringify({
-      exportedAt: new Date().toISOString(),
-      files
-    })
-  });
+  let response;
+  try {
+    response = await fetch(getCsvSyncServerUrl(settings, "/sync"), {
+      method: "POST",
+      headers: getCsvSyncServerHeaders(settings),
+      body: JSON.stringify({
+        exportedAt: new Date().toISOString(),
+        files
+      })
+    });
+  } catch (error) {
+    throw normalizeCsvSyncError(error);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -594,16 +607,16 @@ async function postCsvExportFiles(settings, files) {
 
 async function testCsvSyncServer() {
   const settings = await loadSettings();
-  if (settings.csvSyncTarget !== "server") {
-    return {
-      message: "Sync target is set to Downloads."
-    };
-  }
 
-  const response = await fetch(getCsvSyncServerUrl(settings, "/health"), {
-    method: "GET",
-    headers: settings.csvSyncToken ? { "X-CountDown-Token": settings.csvSyncToken } : {}
-  });
+  let response;
+  try {
+    response = await fetch(getCsvSyncServerUrl(settings, "/health"), {
+      method: "GET",
+      headers: settings.csvSyncToken ? { "X-CountDown-Token": settings.csvSyncToken } : {}
+    });
+  } catch (error) {
+    throw normalizeCsvSyncError(error);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -617,27 +630,20 @@ async function testCsvSyncServer() {
 
 async function exportAllCsvFiles() {
   let settings = await loadSettings();
-  const target = settings.csvSyncTarget === "server" ? "server" : "downloads";
+  const target = "server";
   let files = buildCsvExportFiles(settings);
   let importedCount = 0;
-  let message = "";
-
-  if (target === "server") {
-    const serverFiles = await getCsvServerFiles(settings);
-    const mergeResult = await mergeCsvServerFiles(settings, serverFiles);
-    importedCount = mergeResult.importedCount;
-    if (mergeResult.changed) {
-      settings = await loadSettings();
-      files = buildCsvExportFiles(settings);
-    }
-    await postCsvExportFiles(settings, files);
-    message = importedCount > 0
-      ? `Synced ${files.length} CSV files to the local server. Imported ${importedCount} new sessions.`
-      : `Synced ${files.length} CSV files to the local server.`;
-  } else {
-    await downloadCsvExportFiles(files);
-    message = `Exported ${files.length} CSV files to Downloads.`;
+  const serverFiles = await getCsvServerFiles(settings);
+  const mergeResult = await mergeCsvServerFiles(settings, serverFiles);
+  importedCount = mergeResult.importedCount;
+  if (mergeResult.changed) {
+    settings = await loadSettings();
+    files = buildCsvExportFiles(settings);
   }
+  await postCsvExportFiles(settings, files);
+  const message = importedCount > 0
+    ? `Synced ${files.length} CSV files to the local server. Imported ${importedCount} new sessions.`
+    : `Synced ${files.length} CSV files to the local server.`;
 
   await chrome.storage.local.set({
     lastAutoExportAt: new Date().toISOString(),
@@ -724,7 +730,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     changes.ankiConnectHost ||
     changes.ankiConnectPort ||
     changes.autoProfileOverrideId ||
-    changes.autoProfilePreviousId
+    changes.autoProfilePreviousId ||
+    changes.autoExportEnabled
   )) {
     scheduleReconcile();
     void loadSettings().then(syncBadgeTicker);
@@ -736,6 +743,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       }
     }
     void loadSettings().then(updateActionBadge);
+    if (changes.autoExportEnabled) {
+      void ensureAutoExportAlarm();
+    }
   }
 });
 

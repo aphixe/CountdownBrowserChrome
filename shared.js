@@ -15,9 +15,13 @@
     ankiConnectPort: 8765,
     autoClockOnAudio: true,
     autoExportEnabled: false,
-    csvSyncTarget: "downloads",
+    csvSyncTarget: "server",
     csvSyncServerUrl: "http://127.0.0.1:8787/sync",
     csvSyncToken: "",
+    totalPeriod: "year",
+    weekStartDay: 1,
+    selectedYear: new Date().getFullYear(),
+    selectedYearFollowsCurrent: true,
     lastAutoExportAt: "",
     lastAutoExportStatus: "",
     autoProfileOverrideId: "",
@@ -131,11 +135,26 @@
     settings.autoExportEnabled = typeof settings.autoExportEnabled === "boolean"
       ? settings.autoExportEnabled
       : defaults.autoExportEnabled;
-    settings.csvSyncTarget = settings.csvSyncTarget === "server" ? "server" : defaults.csvSyncTarget;
+    settings.csvSyncTarget = "server";
     settings.csvSyncServerUrl = typeof settings.csvSyncServerUrl === "string" && settings.csvSyncServerUrl.trim()
       ? settings.csvSyncServerUrl.trim()
       : defaults.csvSyncServerUrl;
     settings.csvSyncToken = typeof settings.csvSyncToken === "string" ? settings.csvSyncToken : "";
+    settings.totalPeriod = ["year", "all", "week"].includes(settings.totalPeriod)
+      ? settings.totalPeriod
+      : defaults.totalPeriod;
+    settings.weekStartDay = Number.isFinite(Number(settings.weekStartDay))
+      ? Math.max(0, Math.min(6, Math.round(Number(settings.weekStartDay))))
+      : defaults.weekStartDay;
+    settings.selectedYearFollowsCurrent = typeof settings.selectedYearFollowsCurrent === "boolean"
+      ? settings.selectedYearFollowsCurrent
+      : defaults.selectedYearFollowsCurrent;
+    settings.selectedYear = Number.isFinite(Number(settings.selectedYear))
+      ? Math.min(new Date().getFullYear(), Math.max(1970, Math.round(Number(settings.selectedYear))))
+      : defaults.selectedYear;
+    if (settings.selectedYearFollowsCurrent) {
+      settings.selectedYear = new Date().getFullYear();
+    }
     settings.lastAutoExportAt = typeof settings.lastAutoExportAt === "string" ? settings.lastAutoExportAt : "";
     settings.lastAutoExportStatus = typeof settings.lastAutoExportStatus === "string" ? settings.lastAutoExportStatus : "";
     settings.autoProfileOverrideId = typeof settings.autoProfileOverrideId === "string" ? settings.autoProfileOverrideId : "";
@@ -398,6 +417,42 @@
       const date = parseDayKey(dayKey);
       return date.getFullYear() === year ? sum + seconds : sum;
     }, 0);
+  }
+
+  function getAllTimeTotalSeconds(settings, profileId, now = new Date()) {
+    const totals = buildDailyTotals(settings, profileId, now);
+    return Object.values(totals).reduce((sum, seconds) => sum + seconds, 0);
+  }
+
+  function getWeekWindowForDate(settings, now = new Date()) {
+    const dayKey = getTrackingDayKey(now, settings);
+    const anchorDate = parseDayKey(dayKey);
+    const weekStartDay = Number.isFinite(Number(settings.weekStartDay))
+      ? Math.max(0, Math.min(6, Math.round(Number(settings.weekStartDay))))
+      : DEFAULT_SETTINGS.weekStartDay;
+    const daysSinceStart = (anchorDate.getDay() - weekStartDay + 7) % 7;
+    const start = addCalendarDays(anchorDate, -daysSinceStart);
+    const end = addCalendarDays(start, 7);
+    return { start, end };
+  }
+
+  function getWeekTotalSeconds(settings, profileId, now = new Date()) {
+    const totals = buildDailyTotals(settings, profileId, now);
+    const { start, end } = getWeekWindowForDate(settings, now);
+    return Object.entries(totals).reduce((sum, [dayKey, seconds]) => {
+      const date = parseDayKey(dayKey);
+      return date >= start && date < end ? sum + seconds : sum;
+    }, 0);
+  }
+
+  function getTotalSecondsForPeriod(settings, profileId, period, now = new Date()) {
+    if (period === "all") {
+      return getAllTimeTotalSeconds(settings, profileId, now);
+    }
+    if (period === "week") {
+      return getWeekTotalSeconds(settings, profileId, now);
+    }
+    return getYearTotalSeconds(settings, profileId, now.getFullYear(), now);
   }
 
   function getDayTimeLeftSeconds(settings, now = new Date()) {
@@ -719,6 +774,7 @@
     formatElapsedCounter,
     formatGoalMinutes,
     getActiveSession,
+    getAllTimeTotalSeconds,
     getDayTimeLeftSeconds,
     getProfile,
     getGraphColorsForProfile,
@@ -726,10 +782,13 @@
     normalizeProfileColor,
     getStreakStats,
     getTodayStats,
+    getTotalSecondsForPeriod,
     getTrackingDayKey,
     getTrackingWindowForDate,
     getTrackingWindowForDayKey,
     getWindowForDate,
+    getWeekTotalSeconds,
+    getWeekWindowForDate,
     getYearTotalSeconds,
     loadSettings,
     getAnkiConnectStatus,

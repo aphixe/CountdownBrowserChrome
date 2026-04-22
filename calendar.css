@@ -88,6 +88,7 @@ body {
 }
 
 .toolbar-button,
+.toolbar-icon-button,
 .toolbar-profile select {
   height: 32px;
   border-radius: 4px;
@@ -103,12 +104,23 @@ body {
   cursor: pointer;
 }
 
+.toolbar-icon-button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  padding: 0;
+  cursor: pointer;
+  line-height: 1;
+}
+
 .toolbar-button:hover,
+.toolbar-icon-button:hover,
 .toolbar-profile select:hover {
   filter: brightness(1.06);
 }
 
 .toolbar-button:focus-visible,
+.toolbar-icon-button:focus-visible,
 .toolbar-profile select:focus-visible,
 .toolbar-scale input:focus-visible {
   outline: 2px solid rgba(239, 176, 227, 0.65);
@@ -131,6 +143,22 @@ body {
     6px 6px,
     100% 100%;
   background-repeat: no-repeat;
+}
+
+.date-picker-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.calendar-date-input {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0.01;
+  pointer-events: none;
 }
 
 .toolbar-profile select option {

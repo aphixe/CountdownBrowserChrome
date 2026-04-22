@@ -32,6 +32,23 @@
         </article>
 
         <article class="panel">
+          <h2>Week Total</h2>
+          <label>
+            <span>Start day</span>
+            <select id="weekStartDaySelect">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+          </label>
+          <p class="hint">This week counts 7 days from the selected start day.</p>
+        </article>
+
+        <article class="panel">
           <h2>Profile Goal</h2>
           <label>
             <span>Profile</span>
@@ -132,13 +149,10 @@
         <div class="panel-head">
           <h2>CSV Sync</h2>
         </div>
-        <label>
-          <span>Sync target</span>
-          <select id="csvSyncTargetSelect">
-            <option value="server">Local sync server</option>
-            <option value="downloads">Downloads folder</option>
-          </select>
-        </label>
+        <p class="hint">
+          CSV sync uses the local sync server only. Server files and helper scripts are in
+          <a href="https://github.com/aphixe/CountdownBrowserChrome/tree/master/tools" target="_blank" rel="noopener noreferrer">the tools folder</a>.
+        </p>
         <label class="toggle-row" for="autoExportEnabledInput">
           <span>Auto sync every 10 minutes</span>
           <input id="autoExportEnabledInput" type="checkbox">
@@ -153,7 +167,7 @@
             <input id="csvSyncTokenInput" type="password" autocomplete="off" spellcheck="false">
           </label>
         </div>
-        <p class="hint">The local sync server writes CSV files directly to a folder watched by Syncthing. Downloads mode may still follow Chrome's download prompt setting.</p>
+        <p class="hint">The local sync server writes CSV files to the folder you set when starting the CSV sync server.</p>
         <div class="footer import-actions">
           <div id="autoExportStatus" class="save-status" aria-live="polite"></div>
           <div class="auto-export-actions">

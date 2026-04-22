@@ -12,6 +12,7 @@ const {
 
 const dayStartInput = document.getElementById("dayStartInput");
 const dayEndInput = document.getElementById("dayEndInput");
+const weekStartDaySelect = document.getElementById("weekStartDaySelect");
 const profileGoalSelect = document.getElementById("profileGoalSelect");
 const superGoalHoursInput = document.getElementById("superGoalHoursInput");
 const superGoalMinutesInput = document.getElementById("superGoalMinutesInput");
@@ -34,7 +35,6 @@ const ankiConnectIndicatorText = document.getElementById("ankiConnectIndicatorTe
 const ankiConnectStatus = document.getElementById("ankiConnectStatus");
 const testAnkiConnectButton = document.getElementById("testAnkiConnectButton");
 const autoExportEnabledInput = document.getElementById("autoExportEnabledInput");
-const csvSyncTargetSelect = document.getElementById("csvSyncTargetSelect");
 const syncServerFields = document.getElementById("syncServerFields");
 const csvSyncServerUrlInput = document.getElementById("csvSyncServerUrlInput");
 const csvSyncTokenInput = document.getElementById("csvSyncTokenInput");
@@ -73,9 +73,8 @@ function setAnkiIndicator(state, text) {
 }
 
 function renderCsvSyncTargetFields() {
-  const isServerTarget = csvSyncTargetSelect.value === "server";
-  syncServerFields.hidden = !isServerTarget;
-  testSyncServerButton.hidden = !isServerTarget;
+  syncServerFields.hidden = false;
+  testSyncServerButton.hidden = false;
 }
 
 function splitGoalMinutes(totalMinutes) {
@@ -223,6 +222,7 @@ function renderProfilesList() {
 function renderOptions() {
   dayStartInput.value = draftSettings.dayStart;
   dayEndInput.value = draftSettings.dayEnd;
+  weekStartDaySelect.value = String(draftSettings.weekStartDay);
   ankiConnectEnabledInput.checked = Boolean(draftSettings.ankiConnectEnabled);
   ankiConnectHostInput.value = draftSettings.ankiConnectHost || "127.0.0.1";
   ankiConnectPortInput.value = String(draftSettings.ankiConnectPort || 8765);
@@ -230,7 +230,6 @@ function renderOptions() {
   ankiConnectPortInput.disabled = !draftSettings.ankiConnectEnabled;
   testAnkiConnectButton.disabled = false;
   autoExportEnabledInput.checked = Boolean(draftSettings.autoExportEnabled);
-  csvSyncTargetSelect.value = draftSettings.csvSyncTarget || "downloads";
   csvSyncServerUrlInput.value = draftSettings.csvSyncServerUrl || "http://127.0.0.1:8787/sync";
   csvSyncTokenInput.value = draftSettings.csvSyncToken || "";
   renderCsvSyncTargetFields();
@@ -257,11 +256,12 @@ function addProfile() {
 function syncDraftFromInputs() {
   draftSettings.dayStart = dayStartInput.value || "07:00";
   draftSettings.dayEnd = dayEndInput.value || "23:00";
+  draftSettings.weekStartDay = Math.max(0, Math.min(6, Number(weekStartDaySelect.value) || 0));
   draftSettings.ankiConnectEnabled = Boolean(ankiConnectEnabledInput.checked);
   draftSettings.ankiConnectHost = String(ankiConnectHostInput.value || "127.0.0.1").trim() || "127.0.0.1";
   draftSettings.ankiConnectPort = Math.max(1, Math.min(65535, Number(ankiConnectPortInput.value) || 8765));
   draftSettings.autoExportEnabled = Boolean(autoExportEnabledInput.checked);
-  draftSettings.csvSyncTarget = csvSyncTargetSelect.value === "server" ? "server" : "downloads";
+  draftSettings.csvSyncTarget = "server";
   draftSettings.csvSyncServerUrl = String(csvSyncServerUrlInput.value || "http://127.0.0.1:8787/sync").trim() || "http://127.0.0.1:8787/sync";
   draftSettings.csvSyncToken = String(csvSyncTokenInput.value || "");
   ankiConnectHostInput.value = draftSettings.ankiConnectHost;
@@ -480,7 +480,9 @@ async function exportAllNow() {
     const response = await sendCsvSyncMessage("export-all-csv");
     setAutoExportStatus(response.message || `Synced ${response.count} CSV files.`);
   } catch (error) {
-    setAutoExportStatus(error && error.message ? error.message : "Sync failed.");
+    const message = error && error.message ? error.message : "Sync failed.";
+    setAutoExportStatus(message);
+    window.alert(message);
   } finally {
     exportAllNowButton.disabled = false;
   }
@@ -494,7 +496,9 @@ async function testSyncServer() {
     const response = await sendCsvSyncMessage("test-csv-sync-server");
     setAutoExportStatus(response.message || "Sync server is reachable.");
   } catch (error) {
-    setAutoExportStatus(error && error.message ? error.message : "Sync server test failed.");
+    const message = error && error.message ? error.message : "Sync server test failed.";
+    setAutoExportStatus(message);
+    window.alert(message);
   } finally {
     testSyncServerButton.disabled = false;
   }
@@ -523,6 +527,7 @@ async function initializeOptions() {
   superGoalMinutesInput.addEventListener("input", () => setStatus(""));
   dayStartInput.addEventListener("input", () => setStatus(""));
   dayEndInput.addEventListener("input", () => setStatus(""));
+  weekStartDaySelect.addEventListener("change", () => setStatus(""));
   ankiConnectEnabledInput.addEventListener("change", () => {
     setStatus("");
     void refreshAnkiConnectStatus({ persist: true });
@@ -542,14 +547,6 @@ async function initializeOptions() {
   exportButton.addEventListener("click", exportCsv);
   exportAllNowButton.addEventListener("click", exportAllNow);
   testSyncServerButton.addEventListener("click", testSyncServer);
-  csvSyncTargetSelect.addEventListener("change", () => {
-    renderCsvSyncTargetFields();
-    void persistAutoExportSettings({ requestPermission: true }).then(() => {
-      setAutoExportStatus("");
-    }).catch((error) => {
-      setAutoExportStatus(error && error.message ? error.message : "Sync target permission was not granted.");
-    });
-  });
   csvSyncServerUrlInput.addEventListener("input", () => setAutoExportStatus(""));
   csvSyncTokenInput.addEventListener("input", () => setAutoExportStatus(""));
   autoExportEnabledInput.addEventListener("change", () => {

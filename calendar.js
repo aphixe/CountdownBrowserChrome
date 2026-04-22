@@ -16,6 +16,8 @@ const previousButton = document.getElementById("previousButton");
 const nextButton = document.getElementById("nextButton");
 const thisWeekButton = document.getElementById("thisWeekButton");
 const nowButton = document.getElementById("nowButton");
+const datePickerButton = document.getElementById("datePickerButton");
+const calendarDateInput = document.getElementById("calendarDateInput");
 const scaleSlider = document.getElementById("scaleSlider");
 const scaleLabel = document.getElementById("scaleLabel");
 const weekLabel = document.getElementById("weekLabel");
@@ -49,6 +51,7 @@ const closeButton = document.getElementById("closeButton");
 const state = {
   settings: null,
   weekStart: startOfWeek(new Date()),
+  selectedDate: startOfDay(new Date()),
   selectedProfileId: CALENDAR_PROFILE_ALL,
   scaleIndex: 2,
   pixelsPerMinute: 2.2,
@@ -99,10 +102,54 @@ function startOfWeek(date) {
   return next;
 }
 
+function makeLocalDate(year, monthIndex, day) {
+  return new Date(year, monthIndex, day, 12, 0, 0, 0);
+}
+
 function addDays(date, amount) {
   const next = new Date(date);
   next.setDate(next.getDate() + amount);
   return next;
+}
+
+function getSelectedYear(settings, now = new Date()) {
+  const currentYear = now.getFullYear();
+  return Number.isFinite(Number(settings.selectedYear))
+    ? Math.min(currentYear, Math.max(1970, Math.round(Number(settings.selectedYear))))
+    : currentYear;
+}
+
+function getYearWeekBounds(year, now = new Date()) {
+  const currentYear = now.getFullYear();
+  const firstWeekStart = startOfWeek(makeLocalDate(year, 0, 1));
+  const lastAnchor = year >= currentYear ? now : makeLocalDate(year, 11, 31);
+  return {
+    firstWeekStart,
+    lastWeekStart: startOfWeek(lastAnchor)
+  };
+}
+
+function clampWeekStartToYear(weekStart, year, now = new Date()) {
+  const { firstWeekStart, lastWeekStart } = getYearWeekBounds(year, now);
+  if (weekStart < firstWeekStart) {
+    return firstWeekStart;
+  }
+  if (weekStart > lastWeekStart) {
+    return lastWeekStart;
+  }
+  return weekStart;
+}
+
+function formatDateInputValue(date) {
+  return formatDayKey(date);
+}
+
+function parseDateInputValue(value) {
+  const [year, month, day] = String(value || "").split("-").map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+  return startOfDay(new Date(year, month - 1, day));
 }
 
 function formatDayKey(date) {
@@ -367,6 +414,16 @@ function renderProfiles(settings) {
   const values = new Set(Array.from(profileSelect.options).map((option) => option.value));
   state.selectedProfileId = values.has(previousValue) ? previousValue : CALENDAR_PROFILE_ALL;
   profileSelect.value = state.selectedProfileId;
+}
+
+function syncDateInput() {
+  const today = startOfDay(new Date());
+  const selectedYear = getSelectedYear(state.settings || {});
+  state.selectedDate = state.selectedDate > today
+    ? today
+    : clampWeekStartToYear(state.selectedDate, selectedYear);
+  calendarDateInput.max = formatDateInputValue(today);
+  calendarDateInput.value = formatDateInputValue(state.selectedDate);
 }
 
 function renderHeader(weekTotals) {
@@ -837,6 +894,7 @@ function drawCalendar() {
   }
 
   syncScaleMetrics();
+  syncDateInput();
   updateWeekLabel();
   const { weekTotals, blocks } = buildCalendarData(state.settings);
   renderHeader(weekTotals);
@@ -848,8 +906,10 @@ function drawCalendar() {
 }
 
 function updateNavButtons() {
-  const currentWeekStart = startOfWeek(new Date());
-  nextButton.disabled = state.weekStart >= currentWeekStart;
+  const selectedYear = getSelectedYear(state.settings || {});
+  const { firstWeekStart, lastWeekStart } = getYearWeekBounds(selectedYear);
+  previousButton.disabled = state.weekStart <= firstWeekStart;
+  nextButton.disabled = state.weekStart >= lastWeekStart;
 }
 
 async function saveWindowBounds() {
@@ -871,7 +931,31 @@ function scheduleBoundsSave() {
 
 async function refresh() {
   state.settings = await loadSettings();
+  const selectedYear = getSelectedYear(state.settings);
+  state.weekStart = state.settings.selectedYearFollowsCurrent
+    ? startOfWeek(new Date())
+    : clampWeekStartToYear(state.weekStart, selectedYear);
+  if (state.settings.selectedYearFollowsCurrent) {
+    state.selectedDate = startOfDay(new Date());
+  } else {
+    state.selectedDate = clampWeekStartToYear(state.selectedDate, selectedYear);
+  }
   renderProfiles(state.settings);
+  drawCalendar();
+}
+
+async function setCalendarDate(date) {
+  const currentYear = new Date().getFullYear();
+  const today = startOfDay(new Date());
+  const selectedDate = startOfDay(date > today ? today : date);
+  const selectedYear = Math.min(currentYear, Math.max(1970, selectedDate.getFullYear()));
+
+  state.settings.selectedYear = selectedYear;
+  state.settings.selectedYearFollowsCurrent = formatDayKey(selectedDate) === formatDayKey(today);
+  state.settings = await saveSettings(state.settings);
+  state.selectedDate = selectedDate;
+  state.weekStart = clampWeekStartToYear(startOfWeek(selectedDate), selectedYear);
+
   drawCalendar();
 }
 
@@ -898,28 +982,42 @@ async function initialize() {
   });
 
   previousButton.addEventListener("click", () => {
-    state.weekStart = addDays(state.weekStart, -7);
+    const selectedYear = getSelectedYear(state.settings);
+    state.weekStart = clampWeekStartToYear(addDays(state.weekStart, -7), selectedYear);
+    state.selectedDate = state.weekStart;
     drawCalendar();
   });
 
   nextButton.addEventListener("click", () => {
-    const currentWeekStart = startOfWeek(new Date());
-    state.weekStart = addDays(state.weekStart, 7);
-    if (state.weekStart > currentWeekStart) {
-      state.weekStart = currentWeekStart;
-    }
+    const selectedYear = getSelectedYear(state.settings);
+    state.weekStart = clampWeekStartToYear(addDays(state.weekStart, 7), selectedYear);
+    state.selectedDate = state.weekStart;
     drawCalendar();
   });
 
-  thisWeekButton.addEventListener("click", () => {
-    state.weekStart = startOfWeek(new Date());
-    drawCalendar();
+  thisWeekButton.addEventListener("click", async () => {
+    await setCalendarDate(new Date());
   });
 
-  nowButton.addEventListener("click", () => {
-    state.weekStart = startOfWeek(new Date());
-    drawCalendar();
+  nowButton.addEventListener("click", async () => {
+    await setCalendarDate(new Date());
     scrollToCurrentTime();
+  });
+
+  datePickerButton.addEventListener("click", () => {
+    if (typeof calendarDateInput.showPicker === "function") {
+      calendarDateInput.showPicker();
+      return;
+    }
+    calendarDateInput.click();
+  });
+
+  calendarDateInput.addEventListener("change", () => {
+    const selectedDate = parseDateInputValue(calendarDateInput.value);
+    if (!selectedDate) {
+      return;
+    }
+    void setCalendarDate(selectedDate);
   });
 
   scaleSlider.addEventListener("input", () => {

@@ -8,6 +8,7 @@ const {
   getProfile,
   getStreakStats,
   getTodayStats,
+  getTotalSecondsForPeriod,
   getYearTotalSeconds,
   loadSettings,
   saveSettings,
@@ -46,6 +47,9 @@ const todayTimer = document.getElementById("todayTimer");
 const dayTimeLeft = document.getElementById("dayTimeLeft");
 const goalProgressFill = document.getElementById("goalProgressFill");
 const goalProgressText = document.getElementById("goalProgressText");
+const heatmapYearSelect = document.getElementById("heatmapYearSelect");
+const totalPeriodButton = document.getElementById("totalPeriodButton");
+const totalPeriodLabel = document.getElementById("totalPeriodLabel");
 const yearTotal = document.getElementById("yearTotal");
 const longestStreak = document.getElementById("longestStreak");
 const currentStreak = document.getElementById("currentStreak");
@@ -68,6 +72,15 @@ let liveIntervalId = null;
 const isFloatingWindow = new URLSearchParams(window.location.search).get("mode") === "window";
 let saveBoundsTimeoutId = null;
 let lastManualAddSessionId = "";
+let displayedTotalSeconds = null;
+let totalAnimationFrameId = 0;
+
+const totalPeriodOrder = ["year", "all", "week"];
+const totalPeriodLabels = {
+  year: "Year total:",
+  all: "All time:",
+  week: "This week:"
+};
 
 function cloneSession(session) {
   return session
@@ -149,12 +162,60 @@ function getIntensityLevel(seconds, goalSeconds) {
   return 0;
 }
 
-function renderHeatmap(settings) {
-  const now = new Date();
+function getSelectedYear(settings, now = new Date()) {
+  const currentYear = now.getFullYear();
+  return Number.isFinite(Number(settings.selectedYear))
+    ? Math.min(currentYear, Math.max(1970, Math.round(Number(settings.selectedYear))))
+    : currentYear;
+}
+
+function getAvailableYears(settings, profileId, now = new Date()) {
+  const currentYear = now.getFullYear();
+  let earliestYear = currentYear;
+  const totals = buildDailyTotals(settings, profileId, now);
+
+  for (const dayKey of Object.keys(totals)) {
+    const year = Number(dayKey.slice(0, 4));
+    if (Number.isFinite(year) && year <= currentYear) {
+      earliestYear = Math.min(earliestYear, year);
+    }
+  }
+
+  const years = [];
+  for (let year = currentYear; year >= earliestYear; year -= 1) {
+    years.push(year);
+  }
+  return years;
+}
+
+function renderYearSelect(settings, profileId, selectedYear, now = new Date()) {
+  const years = getAvailableYears(settings, profileId, now);
+  if (!years.includes(selectedYear)) {
+    years.push(selectedYear);
+    years.sort((left, right) => right - left);
+  }
+
+  const optionKey = years.join(",");
+  if (heatmapYearSelect.dataset.optionKey === optionKey) {
+    heatmapYearSelect.value = String(selectedYear);
+    return;
+  }
+
+  heatmapYearSelect.innerHTML = "";
+  for (const year of years) {
+    const option = document.createElement("option");
+    option.value = String(year);
+    option.textContent = String(year);
+    option.selected = year === selectedYear;
+    heatmapYearSelect.append(option);
+  }
+  heatmapYearSelect.dataset.optionKey = optionKey;
+}
+
+function renderHeatmap(settings, selectedYear, now = new Date()) {
   const profile = getProfile(settings, settings.activeProfileId);
   const goalSeconds = profile.superGoalMinutes * 60;
   const totals = buildDailyTotals(settings, profile.id, now);
-  const currentYear = now.getFullYear();
 
   heatmap.innerHTML = "";
 
@@ -170,16 +231,16 @@ function renderHeatmap(settings) {
     const grid = document.createElement("div");
     grid.className = "month-grid";
 
-    const firstDayOfMonth = new Date(currentYear, monthIndex, 1);
-    const daysInMonth = new Date(currentYear, monthIndex + 1, 0).getDate();
+    const firstDayOfMonth = new Date(selectedYear, monthIndex, 1);
+    const daysInMonth = new Date(selectedYear, monthIndex + 1, 0).getDate();
     for (let day = 1; day <= daysInMonth; day += 1) {
-      const date = new Date(currentYear, monthIndex, day);
+      const date = new Date(selectedYear, monthIndex, day);
       const mondayFirstRow = (date.getDay() + 6) % 7;
       const firstDayRow = (firstDayOfMonth.getDay() + 6) % 7;
       const cellIndex = firstDayRow + (day - 1);
       const column = Math.floor(cellIndex / 7) + 1;
       const row = mondayFirstRow + 1;
-      const key = `${currentYear}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const key = `${selectedYear}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       const level = getIntensityLevel(totals[key] || 0, goalSeconds);
       const dot = document.createElement("div");
       dot.className = `day-dot${level ? ` level-${level}` : ""}`;
@@ -217,6 +278,44 @@ function updateFloatingWindowIcon(isRunning) {
   pageFavicon.href = isRunning
     ? buildEmojiIconDataUrl("⌛", 128)
     : defaultFloatingIconHref;
+}
+
+function animateTotalSeconds(targetSeconds, options = {}) {
+  const target = Math.max(0, Math.round(targetSeconds));
+
+  if (totalAnimationFrameId) {
+    cancelAnimationFrame(totalAnimationFrameId);
+    totalAnimationFrameId = 0;
+  }
+
+  if (options.immediate || displayedTotalSeconds === null) {
+    displayedTotalSeconds = target;
+    yearTotal.textContent = formatDuration(target);
+    return;
+  }
+
+  const startSeconds = displayedTotalSeconds;
+  const startedAt = performance.now();
+  const durationMs = 260;
+
+  function step(timestamp) {
+    const progress = Math.min((timestamp - startedAt) / durationMs, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(startSeconds + ((target - startSeconds) * eased));
+    displayedTotalSeconds = current;
+    yearTotal.textContent = formatDuration(current);
+
+    if (progress < 1) {
+      totalAnimationFrameId = requestAnimationFrame(step);
+      return;
+    }
+
+    displayedTotalSeconds = target;
+    yearTotal.textContent = formatDuration(target);
+    totalAnimationFrameId = 0;
+  }
+
+  totalAnimationFrameId = requestAnimationFrame(step);
 }
 
 async function getStoredFloatingWindowBounds() {
@@ -310,11 +409,16 @@ async function render() {
   const now = new Date();
   const today = getTodayStats(settings, profile.id, now);
   const streaks = getStreakStats(settings, profile.id, now);
-  const yearSeconds = getYearTotalSeconds(settings, profile.id, now.getFullYear(), now);
+  const totalPeriod = totalPeriodOrder.includes(settings.totalPeriod) ? settings.totalPeriod : "year";
+  const selectedYear = getSelectedYear(settings, now);
+  const totalSeconds = totalPeriod === "year"
+    ? getYearTotalSeconds(settings, profile.id, selectedYear, now)
+    : getTotalSecondsForPeriod(settings, profile.id, totalPeriod, now);
   const activeSession = getActiveSession(settings, profile.id);
 
   renderProfiles(settings);
-  renderHeatmap(settings);
+  renderYearSelect(settings, profile.id, selectedYear, now);
+  renderHeatmap(settings, selectedYear, now);
 
   todayTimer.textContent = formatElapsedCounter(today.totalSeconds);
   dayTimeLeft.textContent = `Day time left: ${formatDuration(getDayTimeLeftSeconds(settings, now))}`;
@@ -324,7 +428,9 @@ async function render() {
     : 0;
   goalProgressFill.style.width = `${goalProgressPercent}%`;
   goalProgressText.textContent = `${Math.round(goalProgressPercent)}%`;
-  yearTotal.textContent = formatDuration(yearSeconds);
+  totalPeriodLabel.textContent = totalPeriodLabels[totalPeriod];
+  totalPeriodButton.title = `Showing ${totalPeriodLabels[totalPeriod].slice(0, -1)}. Click or scroll to change.`;
+  animateTotalSeconds(totalSeconds);
   longestStreak.textContent = `${streaks.longestStreak} days`;
   currentStreak.textContent = `${streaks.currentStreak} days`;
   goalLabel.textContent = `Super goal: ${formatGoalMinutes(profile.superGoalMinutes)}`;
@@ -377,6 +483,25 @@ async function toggleClock() {
 async function handleAutoClockOnAudioChange(event) {
   const settings = await loadSettings();
   settings.autoClockOnAudio = Boolean(event.target.checked);
+  await saveSettings(settings);
+  await renderAndResize();
+}
+
+async function changeTotalPeriod(direction = 1) {
+  const settings = await loadSettings();
+  const currentIndex = Math.max(0, totalPeriodOrder.indexOf(settings.totalPeriod));
+  const nextIndex = (currentIndex + direction + totalPeriodOrder.length) % totalPeriodOrder.length;
+  settings.totalPeriod = totalPeriodOrder[nextIndex];
+  await saveSettings(settings);
+  await renderAndResize();
+}
+
+async function handleHeatmapYearChange(event) {
+  const settings = await loadSettings();
+  const currentYear = new Date().getFullYear();
+  const selectedYear = Math.min(currentYear, Math.max(1970, Number(event.target.value) || currentYear));
+  settings.selectedYear = selectedYear;
+  settings.selectedYearFollowsCurrent = selectedYear === currentYear;
   await saveSettings(settings);
   await renderAndResize();
 }
@@ -513,8 +638,10 @@ async function syncNow() {
     syncNowButton.title = response.message || "Sync complete";
     showSyncNowStatus("success");
   } catch (error) {
-    syncNowButton.title = error && error.message ? error.message : "Sync failed.";
+    const message = error && error.message ? error.message : "Sync failed.";
+    syncNowButton.title = message;
     showSyncNowStatus("error");
+    window.alert(message);
   } finally {
     syncNowButton.classList.remove("is-syncing");
     syncNowButton.disabled = false;
@@ -538,8 +665,16 @@ async function initializePopup() {
   liveIntervalId = setInterval(render, 1000);
 
   profileSelect.addEventListener("change", handleProfileChange);
+  heatmapYearSelect.addEventListener("change", handleHeatmapYearChange);
   clockButton.addEventListener("click", toggleClock);
   autoClockOnAudioInput.addEventListener("change", handleAutoClockOnAudioChange);
+  totalPeriodButton.addEventListener("click", () => {
+    void changeTotalPeriod(1);
+  });
+  totalPeriodButton.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    void changeTotalPeriod(event.deltaY < 0 ? -1 : 1);
+  }, { passive: false });
   popOutButton.addEventListener("click", openFloatingWindow);
   openTrendsButton.addEventListener("click", openTrendsWindow);
   openCalendarButton.addEventListener("click", openCalendarWindow);

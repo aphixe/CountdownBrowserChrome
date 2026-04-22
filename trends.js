@@ -1,7 +1,8 @@
 const {
   buildGraphSeries,
   formatDuration,
-  loadSettings
+  loadSettings,
+  saveSettings
 } = window.CountDownPro;
 
 const TRENDS_WINDOW_BOUNDS_KEY = "trendsWindowBounds";
@@ -10,9 +11,12 @@ const DEFAULT_PREFS = {
   scale: "week",
   rangeDays: 365,
   zoom: 100,
-  enabledLabels: []
+  enabledLabels: [],
+  rangeEnd: "",
+  yearAnchor: new Date().getFullYear()
 };
 
+const trendYearSelect = document.getElementById("trendYearSelect");
 const scaleSelect = document.getElementById("scaleSelect");
 const rangeSelect = document.getElementById("rangeSelect");
 const previousButton = document.getElementById("previousButton");
@@ -77,6 +81,52 @@ function daysInYear(year) {
   return Math.round((end.getTime() - start.getTime()) / 86400000);
 }
 
+function getSelectedYear(settings, now = new Date()) {
+  const currentYear = now.getFullYear();
+  return Number.isFinite(Number(settings.selectedYear))
+    ? Math.min(currentYear, Math.max(1970, Math.round(Number(settings.selectedYear))))
+    : currentYear;
+}
+
+function getAvailableYears(settings, now = new Date()) {
+  const currentYear = now.getFullYear();
+  let earliestYear = currentYear;
+
+  for (const session of settings.sessions || []) {
+    const startedAt = new Date(session.startedAt);
+    const year = startedAt.getFullYear();
+    if (Number.isFinite(year) && year <= currentYear) {
+      earliestYear = Math.min(earliestYear, year);
+    }
+  }
+
+  const years = [];
+  for (let year = currentYear; year >= earliestYear; year -= 1) {
+    years.push(year);
+  }
+  return years;
+}
+
+function getYearEndDate(year, now = new Date()) {
+  const today = startOfDay(now);
+  if (year >= today.getFullYear()) {
+    return today;
+  }
+  return makeLocalDate(year, 11, 31);
+}
+
+function clampDateToYear(date, year, now = new Date()) {
+  const minDate = makeLocalDate(year, 0, 1);
+  const maxDate = getYearEndDate(year, now);
+  if (date < minDate) {
+    return minDate;
+  }
+  if (date > maxDate) {
+    return maxDate;
+  }
+  return date;
+}
+
 function getYearDates(year) {
   const today = startOfDay(new Date());
   const maxDays = year === today.getFullYear()
@@ -125,9 +175,10 @@ function buildDates() {
     return getYearDates(state.yearAnchor);
   }
 
-  const endDate = startOfDay(state.rangeEnd);
+  const endDate = clampDateToYear(startOfDay(state.rangeEnd), state.yearAnchor);
   const startDate = addDays(endDate, -(state.rangeDays - 1));
-  return Array.from({ length: state.rangeDays }, (_unused, index) => addDays(startDate, index));
+  return Array.from({ length: state.rangeDays }, (_unused, index) => addDays(startDate, index))
+    .filter((date) => date.getFullYear() === state.yearAnchor);
 }
 
 function buildValuesForSeries(series, dates) {
@@ -205,7 +256,9 @@ function savePrefs() {
       scale: state.scale,
       rangeDays: state.rangeDays,
       zoom: state.zoom,
-      enabledLabels: Array.from(state.enabledLabels)
+      enabledLabels: Array.from(state.enabledLabels),
+      rangeEnd: state.rangeEnd.toISOString(),
+      yearAnchor: state.yearAnchor
     }
   });
 }
@@ -226,14 +279,46 @@ async function loadPrefs() {
   state.rangeDays = prefs.rangeDays === 7 || prefs.rangeDays === 30 || prefs.rangeDays === 365 ? prefs.rangeDays : 365;
   state.zoom = Number.isFinite(Number(prefs.zoom)) ? Math.min(200, Math.max(50, Number(prefs.zoom))) : 100;
   state.enabledLabels = new Set(Array.isArray(prefs.enabledLabels) ? prefs.enabledLabels : []);
+  state.yearAnchor = Number.isFinite(Number(prefs.yearAnchor))
+    ? Math.min(new Date().getFullYear(), Math.max(1970, Math.round(Number(prefs.yearAnchor))))
+    : new Date().getFullYear();
+  const savedRangeEnd = prefs.rangeEnd ? new Date(prefs.rangeEnd) : null;
+  state.rangeEnd = savedRangeEnd && !Number.isNaN(savedRangeEnd.getTime())
+    ? startOfDay(savedRangeEnd)
+    : getYearEndDate(state.yearAnchor);
 }
 
 function syncControlsFromState() {
+  trendYearSelect.value = String(state.yearAnchor);
   scaleSelect.value = state.scale;
   rangeSelect.value = String(state.rangeDays);
   zoomSlider.value = String(state.zoom);
   zoomValue.textContent = `${state.zoom}%`;
   rangeSelect.disabled = state.scale === "year";
+}
+
+function renderYearSelect() {
+  const years = getAvailableYears(state.settings || {}, new Date());
+  if (!years.includes(state.yearAnchor)) {
+    years.push(state.yearAnchor);
+    years.sort((left, right) => right - left);
+  }
+
+  const optionKey = years.join(",");
+  if (trendYearSelect.dataset.optionKey === optionKey) {
+    trendYearSelect.value = String(state.yearAnchor);
+    return;
+  }
+
+  trendYearSelect.innerHTML = "";
+  for (const year of years) {
+    const option = document.createElement("option");
+    option.value = String(year);
+    option.textContent = String(year);
+    option.selected = year === state.yearAnchor;
+    trendYearSelect.append(option);
+  }
+  trendYearSelect.dataset.optionKey = optionKey;
 }
 
 function ensureEnabledLabels() {
@@ -566,11 +651,16 @@ function drawGraph() {
 
 function updateNavButtons() {
   const today = startOfDay(new Date());
+  const yearStart = makeLocalDate(state.yearAnchor, 0, 1);
+  const yearEnd = getYearEndDate(state.yearAnchor, today);
   if (state.scale === "year" || state.rangeDays >= 365) {
     nextButton.disabled = state.yearAnchor >= today.getFullYear();
+    previousButton.disabled = false;
     return;
   }
-  nextButton.disabled = state.rangeEnd >= today;
+  const startDate = addDays(clampDateToYear(state.rangeEnd, state.yearAnchor, today), -(state.rangeDays - 1));
+  previousButton.disabled = startDate <= yearStart;
+  nextButton.disabled = state.rangeEnd >= yearEnd;
 }
 
 function hideTooltip() {
@@ -749,12 +839,27 @@ function handleCanvasPointerMove(event) {
   renderTooltip(index);
 }
 
-function shiftRange(direction) {
+async function persistSelectedYear(followsCurrent = false) {
+  if (!state.settings) {
+    return;
+  }
+
+  state.settings.selectedYear = state.yearAnchor;
+  state.settings.selectedYearFollowsCurrent = followsCurrent && state.yearAnchor === new Date().getFullYear();
+  state.settings = await saveSettings(state.settings);
+}
+
+async function shiftRange(direction) {
   const today = startOfDay(new Date());
 
   if (state.scale === "year" || state.rangeDays >= 365) {
     state.yearAnchor += direction;
     state.yearAnchor = Math.min(today.getFullYear(), state.yearAnchor);
+    state.yearAnchor = Math.max(1970, state.yearAnchor);
+    state.rangeEnd = getYearEndDate(state.yearAnchor, today);
+    renderYearSelect();
+    syncControlsFromState();
+    await persistSelectedYear(state.yearAnchor === today.getFullYear());
     savePrefs();
     drawGraph();
     updateNavButtons();
@@ -762,9 +867,7 @@ function shiftRange(direction) {
   }
 
   state.rangeEnd = addDays(state.rangeEnd, state.rangeDays * direction);
-  if (state.rangeEnd > today) {
-    state.rangeEnd = today;
-  }
+  state.rangeEnd = clampDateToYear(state.rangeEnd, state.yearAnchor, today);
   savePrefs();
   drawGraph();
   updateNavButtons();
@@ -772,11 +875,28 @@ function shiftRange(direction) {
 
 async function refreshData() {
   state.settings = await loadSettings();
+  state.yearAnchor = getSelectedYear(state.settings);
+  state.rangeEnd = state.settings.selectedYearFollowsCurrent
+    ? getYearEndDate(state.yearAnchor)
+    : clampDateToYear(state.rangeEnd, state.yearAnchor);
   state.series = buildGraphSeries(state.settings);
   ensureEnabledLabels();
+  renderYearSelect();
+  syncControlsFromState();
   updateSubtitle();
   renderLegend();
   applyWindowScale();
+  drawGraph();
+  updateNavButtons();
+}
+
+async function handleTrendYearChange() {
+  const currentYear = new Date().getFullYear();
+  state.yearAnchor = Math.min(currentYear, Math.max(1970, Number(trendYearSelect.value) || currentYear));
+  state.rangeEnd = getYearEndDate(state.yearAnchor);
+  await persistSelectedYear(state.yearAnchor === currentYear);
+  savePrefs();
+  syncControlsFromState();
   drawGraph();
   updateNavButtons();
 }
@@ -793,6 +913,10 @@ async function initialize() {
   await loadPrefs();
   syncControlsFromState();
   await refreshData();
+
+  trendYearSelect.addEventListener("change", () => {
+    void handleTrendYearChange();
+  });
 
   scaleSelect.addEventListener("change", () => {
     state.scale = scaleSelect.value;
@@ -820,8 +944,12 @@ async function initialize() {
     drawGraph();
   });
 
-  previousButton.addEventListener("click", () => shiftRange(-1));
-  nextButton.addEventListener("click", () => shiftRange(1));
+  previousButton.addEventListener("click", () => {
+    void shiftRange(-1);
+  });
+  nextButton.addEventListener("click", () => {
+    void shiftRange(1);
+  });
   graphCanvas.addEventListener("mousemove", handleCanvasPointerMove);
   graphCanvas.addEventListener("mouseleave", hideTooltip);
   graphScroll.addEventListener("scroll", () => {

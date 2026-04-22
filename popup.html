@@ -94,8 +94,21 @@
       </section>
 
       <div class="summary-row">
+        <label class="year-select-wrap">
+          <span class="summary-label">Year</span>
+          <select id="heatmapYearSelect" aria-label="Heatmap year"></select>
+        </label>
         <div class="year-total-wrap">
-          <span class="summary-label">Year total:</span>
+          <button
+            id="totalPeriodButton"
+            class="total-period-button"
+            type="button"
+            title="Change total period"
+            aria-label="Change total period"
+          >
+            <span aria-hidden="true">↕</span>
+          </button>
+          <span id="totalPeriodLabel" class="summary-label">Year total:</span>
           <span id="yearTotal" class="summary-value">00:00:00</span>
         </div>
       </div>
