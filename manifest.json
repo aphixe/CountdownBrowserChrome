@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "CountDown Pro",
   "description": "Track focused daily time, streaks, yearly totals, and profile-based immersion goals.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "permissions": [
     "storage",
     "tabs",
